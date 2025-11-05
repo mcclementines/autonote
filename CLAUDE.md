@@ -47,6 +47,15 @@ uv pip sync
 # Add new dependencies
 uv add <package-name>
 
+# Install dev dependencies (includes pytest)
+uv pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Run tests with coverage
+pytest --cov=api --cov=cli
+
 # Access API documentation (with server running)
 # Open http://localhost:8000/docs for Swagger UI
 # Open http://localhost:8000/redoc for ReDoc
@@ -62,33 +71,70 @@ Autonote follows a client-server architecture with a FastAPI REST backend and a 
 autonote/
 ├── api/                    # FastAPI backend
 │   ├── __init__.py
-│   ├── app.py             # Main FastAPI application and routes
+│   ├── app.py             # FastAPI application initialization
 │   ├── server.py          # Server entry point with uvicorn
 │   ├── database.py        # MongoDB connection management
 │   ├── auth.py            # JWT authentication utilities
-│   └── observability.py   # OpenTelemetry configuration
-└── main.py                # CLI client (frontend)
+│   ├── observability.py   # OpenTelemetry configuration
+│   ├── models/            # Pydantic models
+│   │   ├── __init__.py
+│   │   ├── auth.py        # Auth models (UserCreate, UserResponse, etc.)
+│   │   ├── chat.py        # Chat models (ChatRequest, ChatResponse, etc.)
+│   │   └── notes.py       # Notes models (NoteCreate, NoteResponse, etc.)
+│   └── routes/            # Route handlers by domain
+│       ├── __init__.py
+│       ├── health.py      # Health check endpoints
+│       ├── auth.py        # Authentication endpoints
+│       ├── chat.py        # Chat endpoints
+│       └── notes.py       # Notes endpoints
+├── cli/                   # CLI client (frontend)
+│   ├── __init__.py
+│   ├── client.py          # Main REPL loop
+│   ├── config.py          # Configuration and storage utilities
+│   └── commands/          # Command handlers
+│       ├── __init__.py
+│       ├── auth.py        # Auth commands (register, login, logout)
+│       ├── chat.py        # Chat commands (new, sessions, switch, history)
+│       └── notes.py       # Notes commands (create)
+├── tests/                 # Test suite
+│   ├── conftest.py        # Pytest fixtures
+│   ├── api/               # API tests
+│   │   ├── test_auth.py
+│   │   ├── test_chat.py
+│   │   └── test_notes.py
+│   └── cli/               # CLI tests
+│       └── test_commands.py
+└── main.py                # Entry point (thin wrapper)
 ```
 
 ### Components
 
 **FastAPI Backend (`api/`)**
-- `api/app.py`: Main FastAPI application with endpoints
-  - **Authentication:**
+- `api/app.py`: FastAPI application initialization (~51 lines)
+  - Lifespan management (startup/shutdown)
+  - OpenTelemetry instrumentation
+  - Router registration
+  - Lightweight and focused on app setup only
+
+- `api/models/`: Pydantic models for request/response validation
+  - `auth.py`: UserCreate, UserResponse, AuthResponse, LoginRequest
+  - `chat.py`: ChatRequest, ChatResponse, ChatSessionCreate, ChatSessionResponse, Citation, ChatMessageResponse
+  - `notes.py`: NoteCreate, NoteResponse, LinkOut
+  - Clean separation of data models by domain
+
+- `api/routes/`: Route handlers organized by domain
+  - `health.py`: Root (/) and health check endpoints
+  - `auth.py`: Authentication endpoints
     - `POST /auth/register`: User registration with JWT token
     - `POST /auth/login`: User login with JWT token
-  - **Chat & Sessions:**
-    - `POST /chat`: Authenticated chat endpoint with session support (auto-creates session if not provided)
+  - `chat.py`: Chat and session endpoints
+    - `POST /chat`: Authenticated chat endpoint with session support
     - `POST /chat/sessions`: Create new chat session
     - `GET /chat/sessions`: List all user's chat sessions
     - `GET /chat/sessions/{session_id}/messages`: Get conversation history
-  - **Notes:**
+  - `notes.py`: Notes endpoints
     - `POST /notes`: Create note with markdown, tags, and optional notebook
-  - **Public:**
-    - `GET /`: Root endpoint
-    - `GET /health`: Health check endpoint
-  - Uses Pydantic models for request/response validation
-  - Fully instrumented with OpenTelemetry spans and metrics
+  - All routes fully instrumented with OpenTelemetry spans and metrics
 
 - `api/server.py`: Server runner using uvicorn
   - Configurable host, port, and reload settings
@@ -113,18 +159,41 @@ autonote/
   - Custom application metrics (registrations, logins, chat messages, auth failures)
   - Automatic log correlation with trace context
 
-**CLI Client (`main.py`)**
-- Interactive REPL that communicates with the FastAPI backend
+**CLI Client (`cli/`)**
+- `cli/client.py`: Main REPL loop
+  - Interactive terminal interface
+  - Command routing and chat message handling
+  - Error handling and user feedback
+
+- `cli/config.py`: Configuration and storage utilities
+  - API URL configuration
+  - Token and session file management
+  - Save/load/delete helper functions
+
+- `cli/commands/`: Command handlers by domain
+  - `auth.py`: register_user, login_user, logout_user
+  - `chat.py`: new_session, list_sessions, switch_session, view_history
+  - `notes.py`: create_note (multi-line markdown input)
+  - Each command handles its own user interaction and API communication
+
 - Uses `httpx` for HTTP requests with JWT authentication
 - Token storage in `~/.autonote/token`
 - Session storage in `~/.autonote/session`
-- **Commands:**
-  - **Auth:** `/register`, `/login`, `/logout`
-  - **Sessions:** `/new`, `/sessions`, `/switch`, `/history`
-  - **Notes:** `/note` (multi-line markdown input)
-  - **General:** `exit`/`quit`
 - Auto-creates chat sessions on first message if no active session
 - Handles connection errors and authentication failures gracefully
+
+**Tests (`tests/`)**
+- `conftest.py`: Pytest fixtures and test configuration
+  - Database fixtures for testing
+  - API client fixtures
+  - Sample data fixtures
+- `api/`: API endpoint tests
+  - `test_auth.py`: Authentication endpoint tests
+  - `test_chat.py`: Chat and session endpoint tests
+  - `test_notes.py`: Notes endpoint tests
+- `cli/`: CLI command tests
+  - `test_commands.py`: CLI command function tests
+- Run with: `pytest` (after installing dev dependencies)
 
 ### Request Flow
 
