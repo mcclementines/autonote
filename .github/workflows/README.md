@@ -15,8 +15,10 @@ Main CI pipeline that runs on every push and pull request. The pipeline is struc
 **Jobs:**
 
 1. **lint** - Code quality checks
-   - Future: Add ruff, black, or flake8 for code formatting and linting
-   - Placeholder steps included for easy integration
+   - ✅ Runs ruff for fast, comprehensive Python linting
+   - ✅ Checks code formatting with `ruff format --check`
+   - ✅ Lints code with `ruff check`
+   - Enforces consistent code style and catches common bugs
 
 2. **test** - Test suite execution
    - Runs pytest on Python 3.13 (configurable for multiple versions)
@@ -72,13 +74,15 @@ deploy:
     # Deployment steps here
 ```
 
-### Adding Linting
+### Linting (Active)
 
-Uncomment and configure the lint steps in the `lint` job:
+✅ **Linting is now fully configured and active!**
 
-1. Install ruff: `uv pip install ruff`
-2. Run checks: `ruff check .`
-3. Format check: `ruff format --check .`
+The `lint` job uses ruff for comprehensive Python linting:
+- Configured in `pyproject.toml` with sensible defaults
+- Runs `ruff format --check` to verify code formatting
+- Runs `ruff check` to catch bugs and style issues
+- See `pyproject.toml` for full configuration details
 
 ### Multi-Version Testing
 
@@ -119,8 +123,8 @@ python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"
 
 ## Future Enhancements
 
-- [ ] Add code formatting checks (ruff/black)
-- [ ] Add linting (ruff/flake8)
+- [x] ~~Add code formatting checks (ruff/black)~~ ✅ **Done** - Using ruff
+- [x] ~~Add linting (ruff/flake8)~~ ✅ **Done** - Using ruff
 - [ ] Add dependency vulnerability scanning (safety/pip-audit)
 - [ ] Add Docker image builds
 - [ ] Add container scanning (trivy/snyk)
