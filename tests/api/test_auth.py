@@ -1,7 +1,5 @@
 """Tests for authentication endpoints."""
 
-import pytest
-
 
 class TestAuthEndpoints:
     """Test authentication endpoints."""
@@ -56,9 +54,8 @@ class TestAuthEndpoints:
 
     def test_register_invalid_email(self, api_client):
         """Test registration with invalid email format."""
-        response = api_client.post("/auth/register", json={
-            "email": "not-an-email",
-            "name": "Test User"
-        })
+        response = api_client.post(
+            "/auth/register", json={"email": "not-an-email", "name": "Test User"}
+        )
 
         assert response.status_code == 422  # Validation error

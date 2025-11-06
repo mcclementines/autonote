@@ -1,14 +1,15 @@
 """Notes endpoints."""
 
-import structlog
-from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime
-from bson import ObjectId
 
-from ..database import get_db
+import structlog
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException
+
 from ..auth import get_current_user
-from ..observability import get_tracer
+from ..database import get_db
 from ..models import NoteCreate, NoteResponse
+from ..observability import get_tracer
 
 # Initialize logger
 logger = structlog.get_logger(__name__)
@@ -20,10 +21,7 @@ router = APIRouter(prefix="/notes", tags=["notes"])
 
 
 @router.post("", response_model=NoteResponse, status_code=201)
-async def create_note(
-    note: NoteCreate,
-    current_user: dict = Depends(get_current_user)
-):
+async def create_note(note: NoteCreate, current_user: dict = Depends(get_current_user)):
     """
     Create a new note with markdown content.
 
@@ -32,7 +30,6 @@ async def create_note(
     """
     with tracer.start_as_current_span("create_note") as span:
         user_id = str(current_user.get("_id"))
-        user_name = current_user.get("name", "User")
 
         span.set_attribute("user.id", user_id)
         span.set_attribute("note.title", note.title)
@@ -51,19 +48,25 @@ async def create_note(
             try:
                 notebook_obj_id = ObjectId(note.notebook_id)
                 # Verify notebook exists and belongs to user
-                notebook = await db.notebooks.find_one({
-                    "_id": notebook_obj_id,
-                    "author_id": ObjectId(user_id)
-                })
+                notebook = await db.notebooks.find_one(
+                    {"_id": notebook_obj_id, "author_id": ObjectId(user_id)}
+                )
                 if not notebook:
-                    logger.warning("note_creation_failed_invalid_notebook",
-                                 user_id=user_id, notebook_id=note.notebook_id)
+                    logger.warning(
+                        "note_creation_failed_invalid_notebook",
+                        user_id=user_id,
+                        notebook_id=note.notebook_id,
+                    )
                     raise HTTPException(status_code=404, detail="Notebook not found")
             except Exception as e:
                 if isinstance(e, HTTPException):
                     raise
-                logger.error("note_creation_failed_invalid_notebook_id",
-                           user_id=user_id, notebook_id=note.notebook_id, error=str(e))
+                logger.error(
+                    "note_creation_failed_invalid_notebook_id",
+                    user_id=user_id,
+                    notebook_id=note.notebook_id,
+                    error=str(e),
+                )
                 raise HTTPException(status_code=400, detail="Invalid notebook ID format")
 
         # Create note document
@@ -80,7 +83,7 @@ async def create_note(
             "updated_at": now,
             "version": 1,
             "word_count": word_count,
-            "links_out": []
+            "links_out": [],
         }
 
         # Insert into database
@@ -104,10 +107,11 @@ async def create_note(
             updated_at=note_doc["updated_at"],
             version=note_doc["version"],
             word_count=note_doc["word_count"],
-            links_out=[]
+            links_out=[],
         )
 
-        logger.info("note_created_successfully", note_id=note_id, user_id=user_id,
-                   word_count=word_count)
+        logger.info(
+            "note_created_successfully", note_id=note_id, user_id=user_id, word_count=word_count
+        )
 
         return note_response

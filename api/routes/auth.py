@@ -1,14 +1,14 @@
 """Authentication endpoints."""
 
+from datetime import datetime
+
 import structlog
 from fastapi import APIRouter, HTTPException
-from datetime import datetime
-from bson import ObjectId
 
-from ..database import get_db
 from ..auth import create_access_token
-from ..observability import get_tracer, get_app_metrics
-from ..models import UserCreate, UserResponse, AuthResponse, LoginRequest
+from ..database import get_db
+from ..models import AuthResponse, LoginRequest, UserCreate, UserResponse
+from ..observability import get_app_metrics, get_tracer
 
 # Initialize logger
 logger = structlog.get_logger(__name__)
@@ -48,7 +48,7 @@ async def register_user(user: UserCreate):
             "email": user.email,
             "name": user.name,
             "created_at": datetime.utcnow(),
-            "status": "active"
+            "status": "active",
         }
 
         # Insert into database
@@ -66,17 +66,13 @@ async def register_user(user: UserCreate):
             email=user_doc["email"],
             name=user_doc["name"],
             status=user_doc["status"],
-            created_at=user_doc["created_at"]
+            created_at=user_doc["created_at"],
         )
 
         logger.info("user_registered_successfully", user_id=user_id, email=user.email)
         metrics.user_registrations.add(1)
 
-        return AuthResponse(
-            access_token=access_token,
-            token_type="bearer",
-            user=user_response
-        )
+        return AuthResponse(access_token=access_token, token_type="bearer", user=user_response)
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -119,14 +115,10 @@ async def login_user(login: LoginRequest):
             email=user["email"],
             name=user["name"],
             status=user["status"],
-            created_at=user["created_at"]
+            created_at=user["created_at"],
         )
 
         logger.info("user_logged_in_successfully", user_id=user_id, email=login.email)
         metrics.user_logins.add(1)
 
-        return AuthResponse(
-            access_token=access_token,
-            token_type="bearer",
-            user=user_response
-        )
+        return AuthResponse(access_token=access_token, token_type="bearer", user=user_response)

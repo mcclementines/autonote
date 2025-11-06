@@ -1,7 +1,5 @@
 """Tests for notes endpoints."""
 
-import pytest
-
 
 class TestNotesEndpoints:
     """Test notes endpoints."""
@@ -14,9 +12,7 @@ class TestNotesEndpoints:
 
         # Create note with authenticated request
         response = api_client.post(
-            "/notes",
-            json=sample_note_data,
-            headers={"Authorization": f"Bearer {token}"}
+            "/notes", json=sample_note_data, headers={"Authorization": f"Bearer {token}"}
         )
 
         assert response.status_code == 201
@@ -40,13 +36,11 @@ class TestNotesEndpoints:
             "title": "Word Count Test",
             "content_md": "One two three four five.",  # 5 words
             "tags": ["test"],
-            "pinned": False
+            "pinned": False,
         }
 
         response = api_client.post(
-            "/notes",
-            json=note_data,
-            headers={"Authorization": f"Bearer {token}"}
+            "/notes", json=note_data, headers={"Authorization": f"Bearer {token}"}
         )
 
         assert response.status_code == 201
@@ -67,9 +61,7 @@ class TestNotesEndpoints:
 
         # Create note with tags
         response = api_client.post(
-            "/notes",
-            json=sample_note_data,
-            headers={"Authorization": f"Bearer {token}"}
+            "/notes", json=sample_note_data, headers={"Authorization": f"Bearer {token}"}
         )
 
         assert response.status_code == 201
@@ -90,13 +82,11 @@ class TestNotesEndpoints:
             "content_md": "This note belongs to a notebook.",
             "tags": ["test"],
             "pinned": False,
-            "notebook_id": "507f1f77bcf86cd799439011"
+            "notebook_id": "507f1f77bcf86cd799439011",
         }
 
         response = api_client.post(
-            "/notes",
-            json=note_data,
-            headers={"Authorization": f"Bearer {token}"}
+            "/notes", json=note_data, headers={"Authorization": f"Bearer {token}"}
         )
 
         assert response.status_code == 404  # Notebook not found

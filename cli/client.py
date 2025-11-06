@@ -1,17 +1,18 @@
 """Main CLI client with REPL loop."""
 
 import httpx
-from .config import API_URL, load_token, delete_token, save_session, load_session, delete_session
+
 from .commands import (
-    register_user,
+    create_note,
+    list_sessions,
     login_user,
     logout_user,
     new_session,
-    list_sessions,
+    register_user,
     switch_session,
     view_history,
-    create_note,
 )
+from .config import API_URL, delete_session, delete_token, load_session, load_token, save_session
 
 
 def main():
@@ -42,7 +43,7 @@ def main():
         try:
             user_input = input("You: ").strip()
 
-            if user_input.lower() in ['exit', 'quit']:
+            if user_input.lower() in ["exit", "quit"]:
                 print("\nGoodbye!")
                 break
 
@@ -50,35 +51,35 @@ def main():
                 continue
 
             # Handle commands
-            if user_input.lower() == '/register':
+            if user_input.lower() == "/register":
                 register_user()
                 continue
 
-            if user_input.lower() == '/login':
+            if user_input.lower() == "/login":
                 login_user()
                 continue
 
-            if user_input.lower() == '/logout':
+            if user_input.lower() == "/logout":
                 logout_user()
                 continue
 
-            if user_input.lower() == '/note':
+            if user_input.lower() == "/note":
                 create_note()
                 continue
 
-            if user_input.lower() == '/new':
+            if user_input.lower() == "/new":
                 new_session()
                 continue
 
-            if user_input.lower() == '/sessions':
+            if user_input.lower() == "/sessions":
                 list_sessions()
                 continue
 
-            if user_input.lower() == '/switch':
+            if user_input.lower() == "/switch":
                 switch_session()
                 continue
 
-            if user_input.lower() == '/history':
+            if user_input.lower() == "/history":
                 view_history()
                 continue
 
@@ -101,7 +102,7 @@ def main():
                     f"{API_URL}/chat",
                     json=payload,
                     headers={"Authorization": f"Bearer {token}"},
-                    timeout=10.0
+                    timeout=10.0,
                 )
                 response.raise_for_status()
                 data = response.json()

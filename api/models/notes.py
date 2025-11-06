@@ -1,19 +1,22 @@
 """Notes-related Pydantic models."""
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
 class LinkOut(BaseModel):
     """Model for note links (backlinks support)."""
+
     note_id: str
     type: str = "wiki"
 
 
 class NoteCreate(BaseModel):
     """Request model for creating a note."""
-    notebook_id: Optional[str] = None
+
+    notebook_id: str | None = None
     title: str = Field(..., min_length=1, max_length=500)
     content_md: str = Field(..., min_length=1)
     tags: list[str] = Field(default_factory=list)
@@ -22,8 +25,9 @@ class NoteCreate(BaseModel):
 
 class NoteResponse(BaseModel):
     """Response model for note data."""
+
     id: str
-    notebook_id: Optional[str] = None
+    notebook_id: str | None = None
     author_id: str
     title: str
     content_md: str

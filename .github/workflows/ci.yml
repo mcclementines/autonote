@@ -44,19 +44,15 @@ jobs:
           source .venv/bin/activate
           uv pip install -e ".[dev]"
 
-      - name: Check code formatting with ruff (if configured)
+      - name: Check code formatting with ruff
         run: |
           source .venv/bin/activate
-          # Add ruff or black checks here when formatting is configured
-          echo "Formatting checks placeholder - add ruff/black when configured"
-        continue-on-error: true
+          ruff format --check .
 
-      - name: Lint with ruff (if configured)
+      - name: Lint with ruff
         run: |
           source .venv/bin/activate
-          # Add ruff or flake8 checks here when linting is configured
-          echo "Linting checks placeholder - add ruff/flake8 when configured"
-        continue-on-error: true
+          ruff check .
 
   # Test suite
   test:
