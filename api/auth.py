@@ -1,13 +1,14 @@
 """Authentication utilities for JWT token management."""
 
-import structlog
-from datetime import datetime, timedelta
-from typing import Optional
-import os
+from __future__ import annotations
 
-from jose import JWTError, jwt
+import os
+from datetime import datetime, timedelta
+
+import structlog
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from opentelemetry import trace
 
 from .database import get_db
@@ -46,7 +47,7 @@ def create_access_token(user_id: str, email: str) -> str:
         to_encode = {
             "sub": user_id,  # Subject (user_id)
             "email": email,
-            "exp": expire
+            "exp": expire,
         }
         encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -55,7 +56,7 @@ def create_access_token(user_id: str, email: str) -> str:
         return encoded_jwt
 
 
-def decode_access_token(token: str) -> Optional[dict]:
+def decode_access_token(token: str) -> dict | None:
     """
     Decode and verify a JWT token.
 
@@ -81,9 +82,7 @@ def decode_access_token(token: str) -> Optional[dict]:
             return None
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     Dependency to get the current authenticated user.
 
@@ -144,8 +143,7 @@ async def get_current_user(
         if user.get("status") != "active":
             logger.warning("auth_failed_account_disabled", user_id=user_id)
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is disabled"
+                status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled"
             )
 
         logger.debug("auth_user_authenticated", user_id=user_id)

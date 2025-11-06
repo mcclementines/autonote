@@ -61,6 +61,54 @@ pytest --cov=api --cov=cli
 # Open http://localhost:8000/redoc for ReDoc
 ```
 
+### Code Quality & Linting
+```bash
+# Lint code with ruff (fast, comprehensive Python linter)
+ruff check .
+
+# Auto-fix linting issues
+ruff check . --fix
+
+# Format code with ruff
+ruff format .
+
+# Check code formatting (without modifying files)
+ruff format --check .
+
+# Run both linting and formatting checks (matches CI)
+ruff check . && ruff format --check .
+```
+
+**Ruff Configuration:**
+- Configured in `pyproject.toml` with sensible defaults
+- Line length: 100 characters
+- Target: Python 3.13
+- Enabled rules: pycodestyle, pyflakes, isort, pylint, and more
+- FastAPI-specific patterns allowed (e.g., `Depends()` in defaults)
+- Per-file ignores for test fixtures and framework patterns
+
+**Benefits:**
+- 10-100x faster than traditional Python linters
+- Replaces flake8, black, isort, and more in a single tool
+- Automatic code formatting and import sorting
+- Catches common bugs and style issues
+- Enforced in CI pipeline on every commit
+
+### CI/CD Pipeline
+```bash
+# GitHub Actions automatically run on:
+# - Push to main, develop, or claude/** branches
+# - Pull requests to main or develop
+
+# CI pipeline includes:
+# - Code quality checks with ruff (formatting + linting)
+# - Test suite with coverage reports
+# - Security scanning (extensible)
+# - Build validation
+
+# See .github/workflows/README.md for details on extending the pipeline
+```
+
 ## Code Architecture
 
 ### Architecture Overview
@@ -308,6 +356,12 @@ The `/chat` endpoint in `api/app.py` is designed to be extended with:
     - `opentelemetry-instrumentation-httpx`: httpx auto-instrumentation
     - `opentelemetry-instrumentation-logging`: Logging integration
     - `opentelemetry-exporter-otlp`: OTLP exporter for production
+  - **Dev Dependencies**:
+    - `pytest`: Test framework
+    - `pytest-asyncio`: Async test support
+    - `pytest-cov`: Coverage reporting
+    - `mongomock-motor`: MongoDB mocking for tests
+    - `ruff`: Fast Python linter and formatter
   - Requires Python >=3.13
 
 - `.env.example`: Template for environment configuration
@@ -367,6 +421,8 @@ The `/chat` endpoint in `api/app.py` is designed to be extended with:
 
 ## Development Tips
 
+- **Code Quality**: Run `ruff check . --fix` before committing to auto-fix linting issues and ensure code passes CI checks
+- **Formatting**: Use `ruff format .` to automatically format code to project standards
 - **Logs**: By default, console logging is enabled for development
 - **Traces**: Set `OTEL_EXPORTER_TYPE=console` to see traces in terminal
 - **API Docs**: Visit `http://localhost:8000/docs` for interactive API documentation

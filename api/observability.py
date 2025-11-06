@@ -1,20 +1,19 @@
 """OpenTelemetry configuration and initialization for Autonote."""
 
+from __future__ import annotations
+
 import logging
 import os
-from typing import Optional
 
 import structlog
-from opentelemetry import trace, metrics
+from opentelemetry import metrics, trace
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import ConsoleMetricExporter, PeriodicExportingMetricReader
+from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader, ConsoleMetricExporter
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from opentelemetry.instrumentation.logging import LoggingInstrumentor
-
 
 # Service identification
 SERVICE_NAME_VALUE = os.getenv("OTEL_SERVICE_NAME", "autonote-api")
@@ -24,11 +23,13 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 def get_resource() -> Resource:
     """Create OpenTelemetry resource with service attributes."""
-    return Resource.create({
-        SERVICE_NAME: SERVICE_NAME_VALUE,
-        SERVICE_VERSION: SERVICE_VERSION_VALUE,
-        "deployment.environment": ENVIRONMENT,
-    })
+    return Resource.create(
+        {
+            SERVICE_NAME: SERVICE_NAME_VALUE,
+            SERVICE_VERSION: SERVICE_VERSION_VALUE,
+            "deployment.environment": ENVIRONMENT,
+        }
+    )
 
 
 def configure_tracing() -> TracerProvider:
@@ -109,7 +110,7 @@ def configure_metrics() -> MeterProvider:
             # Create metric reader with export interval
             reader = PeriodicExportingMetricReader(
                 metric_exporter,
-                export_interval_millis=int(os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "60000"))
+                export_interval_millis=int(os.getenv("OTEL_METRIC_EXPORT_INTERVAL", "60000")),
             )
             metric_readers.append(reader)
     else:
@@ -164,13 +165,13 @@ def configure_logging():
         # JSON format for production (Splunk, ELK, etc.)
         processors = shared_processors + [
             structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer()
+            structlog.processors.JSONRenderer(),
         ]
     else:
         # Console format for development (human-readable)
         processors = shared_processors + [
             structlog.processors.ExceptionRenderer(),
-            structlog.dev.ConsoleRenderer(colors=True)
+            structlog.dev.ConsoleRenderer(colors=True),
         ]
 
     # Configure structlog
@@ -204,7 +205,7 @@ def initialize_observability():
         "observability_initialized",
         service_name=SERVICE_NAME_VALUE,
         service_version=SERVICE_VERSION_VALUE,
-        environment=ENVIRONMENT
+        environment=ENVIRONMENT,
     )
 
     return tracer_provider, meter_provider
@@ -229,45 +230,37 @@ class AppMetrics:
 
         # Counters
         self.user_registrations = meter.create_counter(
-            name="user.registrations",
-            description="Total number of user registrations",
-            unit="1"
+            name="user.registrations", description="Total number of user registrations", unit="1"
         )
 
         self.user_logins = meter.create_counter(
-            name="user.logins",
-            description="Total number of user logins",
-            unit="1"
+            name="user.logins", description="Total number of user logins", unit="1"
         )
 
         self.chat_messages = meter.create_counter(
-            name="chat.messages",
-            description="Total number of chat messages processed",
-            unit="1"
+            name="chat.messages", description="Total number of chat messages processed", unit="1"
         )
 
         self.auth_failures = meter.create_counter(
-            name="auth.failures",
-            description="Total number of authentication failures",
-            unit="1"
+            name="auth.failures", description="Total number of authentication failures", unit="1"
         )
 
         # Histograms
         self.request_duration = meter.create_histogram(
             name="http.server.request.duration",
             description="HTTP request duration in milliseconds",
-            unit="ms"
+            unit="ms",
         )
 
         self.db_query_duration = meter.create_histogram(
             name="db.query.duration",
             description="Database query duration in milliseconds",
-            unit="ms"
+            unit="ms",
         )
 
 
 # Global metrics instance
-app_metrics: Optional[AppMetrics] = None
+app_metrics: AppMetrics | None = None
 
 
 def get_app_metrics() -> AppMetrics:

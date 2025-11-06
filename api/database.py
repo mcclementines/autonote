@@ -1,11 +1,12 @@
 """MongoDB database connection management."""
 
-import structlog
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from typing import Optional
+from __future__ import annotations
+
 import os
 from time import time
 
+import structlog
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from opentelemetry import trace
 
 # Initialize logger
@@ -15,8 +16,8 @@ logger = structlog.get_logger(__name__)
 class Database:
     """MongoDB database connection manager."""
 
-    client: Optional[AsyncIOMotorClient] = None
-    db: Optional[AsyncIOMotorDatabase] = None
+    client: AsyncIOMotorClient | None = None
+    db: AsyncIOMotorDatabase | None = None
 
     @classmethod
     async def connect(cls) -> None:
@@ -35,9 +36,10 @@ class Database:
             def mask_connection_string(url: str) -> str:
                 """Mask password in MongoDB connection string."""
                 import re
+
                 # Pattern matches: mongodb://user:password@host or mongodb+srv://user:password@host
-                pattern = r'(mongodb(?:\+srv)?://[^:]+:)([^@]+)(@.+)'
-                return re.sub(pattern, r'\1****\3', url)
+                pattern = r"(mongodb(?:\+srv)?://[^:]+:)([^@]+)(@.+)"
+                return re.sub(pattern, r"\1****\3", url)
 
             safe_url = mask_connection_string(mongo_url)
             logger.info("mongodb_connecting", url=safe_url, database=db_name)
@@ -47,7 +49,7 @@ class Database:
 
             # Verify connection
             start_time = time()
-            await cls.client.admin.command('ping')
+            await cls.client.admin.command("ping")
             duration = (time() - start_time) * 1000
 
             logger.info("mongodb_connected", ping_ms=round(duration, 2))

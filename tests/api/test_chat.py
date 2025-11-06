@@ -1,7 +1,5 @@
 """Tests for chat endpoints."""
 
-import pytest
-
 
 class TestChatEndpoints:
     """Test chat endpoints."""
@@ -16,7 +14,7 @@ class TestChatEndpoints:
         response = api_client.post(
             "/chat/sessions",
             json={"title": "Test Session"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
         assert response.status_code == 201
@@ -53,9 +51,7 @@ class TestChatEndpoints:
 
         # Send message (should auto-create session)
         response = api_client.post(
-            "/chat",
-            json=sample_chat_message,
-            headers={"Authorization": f"Bearer {token}"}
+            "/chat", json=sample_chat_message, headers={"Authorization": f"Bearer {token}"}
         )
 
         assert response.status_code == 200
@@ -73,29 +69,20 @@ class TestChatEndpoints:
 
         # Create session
         session_response = api_client.post(
-            "/chat/sessions",
-            json={"title": "Test Session"},
-            headers=headers
+            "/chat/sessions", json={"title": "Test Session"}, headers=headers
         )
         session_id = session_response.json()["id"]
 
         # Send messages
         api_client.post(
-            "/chat",
-            json={"message": "Hello", "session_id": session_id},
-            headers=headers
+            "/chat", json={"message": "Hello", "session_id": session_id}, headers=headers
         )
         api_client.post(
-            "/chat",
-            json={"message": "How are you?", "session_id": session_id},
-            headers=headers
+            "/chat", json={"message": "How are you?", "session_id": session_id}, headers=headers
         )
 
         # Retrieve messages
-        response = api_client.get(
-            f"/chat/sessions/{session_id}/messages",
-            headers=headers
-        )
+        response = api_client.get(f"/chat/sessions/{session_id}/messages", headers=headers)
 
         assert response.status_code == 200
         messages = response.json()
@@ -120,7 +107,7 @@ class TestChatEndpoints:
         response = api_client.post(
             "/chat",
             json={"message": "Hello", "session_id": "507f1f77bcf86cd799439011"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
         assert response.status_code == 404

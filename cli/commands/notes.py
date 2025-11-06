@@ -1,7 +1,8 @@
 """Notes command handlers."""
 
 import httpx
-from ..config import API_URL, load_token, delete_token
+
+from ..config import API_URL, delete_token, load_token
 
 
 def create_note():
@@ -51,11 +52,7 @@ def create_note():
 
     # Send request to API
     try:
-        payload = {
-            "title": title,
-            "content_md": content_md,
-            "tags": tags
-        }
+        payload = {"title": title, "content_md": content_md, "tags": tags}
 
         if notebook_id:
             payload["notebook_id"] = notebook_id
@@ -64,12 +61,12 @@ def create_note():
             f"{API_URL}/notes",
             json=payload,
             headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0
+            timeout=10.0,
         )
         response.raise_for_status()
         data = response.json()
 
-        print(f"\n✓ Note created successfully!")
+        print("\n✓ Note created successfully!")
         print(f"  Note ID: {data['id']}")
         print(f"  Title: {data['title']}")
         print(f"  Word count: {data.get('word_count', 'N/A')}")
@@ -85,7 +82,7 @@ def create_note():
             print("Error: Your account has been disabled.\n")
             delete_token()
         else:
-            error_detail = e.response.json().get('detail', 'Unknown error')
+            error_detail = e.response.json().get("detail", "Unknown error")
             print(f"Error: Failed to create note: {error_detail}\n")
     except httpx.HTTPError as e:
         print(f"Error: API request failed: {e}\n")

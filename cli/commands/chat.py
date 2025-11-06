@@ -1,13 +1,14 @@
 """Chat and session command handlers."""
 
 import httpx
+
 from ..config import (
     API_URL,
-    load_token,
-    delete_token,
-    save_session,
-    load_session,
     delete_session,
+    delete_token,
+    load_session,
+    load_token,
+    save_session,
 )
 
 
@@ -30,7 +31,7 @@ def new_session():
             f"{API_URL}/chat/sessions",
             json=payload,
             headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0
+            timeout=10.0,
         )
         response.raise_for_status()
         data = response.json()
@@ -38,10 +39,10 @@ def new_session():
         # Save as current session
         save_session(data["id"])
 
-        print(f"\n✓ Session created successfully!")
+        print("\n✓ Session created successfully!")
         print(f"  Session ID: {data['id']}")
         print(f"  Title: {data['title']}")
-        print(f"  This is now your active session.\n")
+        print("  This is now your active session.\n")
     except httpx.ConnectError:
         print("Error: Could not connect to API server.")
         print("Please start the server with: python -m api.server\n")
@@ -50,7 +51,7 @@ def new_session():
             print("Error: Authentication failed. Please /login again.\n")
             delete_token()
         else:
-            error_detail = e.response.json().get('detail', 'Unknown error')
+            error_detail = e.response.json().get("detail", "Unknown error")
             print(f"Error: Failed to create session: {error_detail}\n")
     except httpx.HTTPError as e:
         print(f"Error: API request failed: {e}\n")
@@ -65,9 +66,7 @@ def list_sessions():
 
     try:
         response = httpx.get(
-            f"{API_URL}/chat/sessions",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0
+            f"{API_URL}/chat/sessions", headers={"Authorization": f"Bearer {token}"}, timeout=10.0
         )
         response.raise_for_status()
         sessions = response.json()
@@ -115,7 +114,7 @@ def switch_session():
             f"{API_URL}/chat/sessions/{session_id}/messages",
             headers={"Authorization": f"Bearer {token}"},
             params={"limit": 1},
-            timeout=10.0
+            timeout=10.0,
         )
         response.raise_for_status()
 
@@ -152,7 +151,7 @@ def view_history():
         response = httpx.get(
             f"{API_URL}/chat/sessions/{session_id}/messages",
             headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0
+            timeout=10.0,
         )
         response.raise_for_status()
         messages = response.json()

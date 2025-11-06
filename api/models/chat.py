@@ -1,18 +1,23 @@
 """Chat-related Pydantic models."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
     """Request model for chat endpoint."""
+
     message: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class ChatResponse(BaseModel):
     """Response model for chat endpoint."""
+
     response: str
     session_id: str
     message_id: str
@@ -20,11 +25,13 @@ class ChatResponse(BaseModel):
 
 class ChatSessionCreate(BaseModel):
     """Request model for creating a chat session."""
-    title: Optional[str] = None
+
+    title: str | None = None
 
 
 class ChatSessionResponse(BaseModel):
     """Response model for chat session data."""
+
     id: str
     user_id: str
     title: str
@@ -34,13 +41,15 @@ class ChatSessionResponse(BaseModel):
 
 class Citation(BaseModel):
     """Model for message citations."""
+
     note_id: str
-    chunk_id: Optional[str] = None
+    chunk_id: str | None = None
     span: dict[str, int] = Field(default_factory=dict)  # {"start": 0, "end": 120}
 
 
 class ChatMessageResponse(BaseModel):
     """Response model for chat message data."""
+
     id: str
     session_id: str
     role: Literal["user", "assistant", "system"]

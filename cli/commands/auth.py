@@ -1,7 +1,8 @@
 """Authentication command handlers."""
 
 import httpx
-from ..config import API_URL, save_token, delete_token, delete_session
+
+from ..config import API_URL, delete_session, delete_token, save_token
 
 
 def register_user():
@@ -16,9 +17,7 @@ def register_user():
 
     try:
         response = httpx.post(
-            f"{API_URL}/auth/register",
-            json={"email": email, "name": name},
-            timeout=10.0
+            f"{API_URL}/auth/register", json={"email": email, "name": name}, timeout=10.0
         )
         response.raise_for_status()
         data = response.json()
@@ -27,7 +26,7 @@ def register_user():
         save_token(data["access_token"])
 
         user = data["user"]
-        print(f"\n✓ Registration successful! You are now logged in.")
+        print("\n✓ Registration successful! You are now logged in.")
         print(f"  User ID: {user['id']}")
         print(f"  Email: {user['email']}")
         print(f"  Name: {user['name']}\n")
@@ -53,11 +52,7 @@ def login_user():
         return
 
     try:
-        response = httpx.post(
-            f"{API_URL}/auth/login",
-            json={"email": email},
-            timeout=10.0
-        )
+        response = httpx.post(f"{API_URL}/auth/login", json={"email": email}, timeout=10.0)
         response.raise_for_status()
         data = response.json()
 
@@ -65,7 +60,7 @@ def login_user():
         save_token(data["access_token"])
 
         user = data["user"]
-        print(f"\n✓ Login successful!")
+        print("\n✓ Login successful!")
         print(f"  Welcome back, {user['name']}!\n")
     except httpx.ConnectError:
         print("Error: Could not connect to API server.")

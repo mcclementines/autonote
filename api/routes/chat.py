@@ -1,21 +1,22 @@
 """Chat and chat session endpoints."""
 
-import structlog
-from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime
-from bson import ObjectId
 
-from ..database import get_db
+import structlog
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException
+
 from ..auth import get_current_user
-from ..observability import get_tracer, get_app_metrics
+from ..database import get_db
 from ..models import (
+    ChatMessageResponse,
     ChatRequest,
     ChatResponse,
     ChatSessionCreate,
     ChatSessionResponse,
-    ChatMessageResponse,
     Citation,
 )
+from ..observability import get_app_metrics, get_tracer
 
 # Initialize logger
 logger = structlog.get_logger(__name__)
@@ -28,10 +29,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(
-    request: ChatRequest,
-    current_user: dict = Depends(get_current_user)
-):
+async def chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     """
     Process user input and return a response with conversation history.
 
@@ -55,27 +53,32 @@ async def chat(
         if request.session_id:
             try:
                 session_obj_id = ObjectId(request.session_id)
-                session = await db.chat_sessions.find_one({
-                    "_id": session_obj_id,
-                    "user_id": ObjectId(user_id)
-                })
+                session = await db.chat_sessions.find_one(
+                    {"_id": session_obj_id, "user_id": ObjectId(user_id)}
+                )
 
                 if not session:
-                    logger.warning("chat_session_not_found", user_id=user_id, session_id=request.session_id)
+                    logger.warning(
+                        "chat_session_not_found", user_id=user_id, session_id=request.session_id
+                    )
                     raise HTTPException(status_code=404, detail="Chat session not found")
 
                 session_id = request.session_id
 
                 # Update last_active_at
                 await db.chat_sessions.update_one(
-                    {"_id": session_obj_id},
-                    {"$set": {"last_active_at": now}}
+                    {"_id": session_obj_id}, {"$set": {"last_active_at": now}}
                 )
 
             except Exception as e:
                 if isinstance(e, HTTPException):
                     raise
-                logger.error("invalid_session_id", user_id=user_id, session_id=request.session_id, error=str(e))
+                logger.error(
+                    "invalid_session_id",
+                    user_id=user_id,
+                    session_id=request.session_id,
+                    error=str(e),
+                )
                 raise HTTPException(status_code=400, detail="Invalid session ID format")
         else:
             # Create new session
@@ -83,7 +86,7 @@ async def chat(
                 "user_id": ObjectId(user_id),
                 "title": f"Chat {now.strftime('%Y-%m-%d %H:%M')}",
                 "created_at": now,
-                "last_active_at": now
+                "last_active_at": now,
             }
             result = await db.chat_sessions.insert_one(session_doc)
             session_id = str(result.inserted_id)
@@ -98,9 +101,9 @@ async def chat(
             "role": "user",
             "content": request.message,
             "citations": [],
-            "created_at": now
+            "created_at": now,
         }
-        user_msg_result = await db.chat_messages.insert_one(user_message_doc)
+        _user_msg_result = await db.chat_messages.insert_one(user_message_doc)
 
         # TODO: Replace with actual chat/processing logic (RAG, LLM, etc.)
         response_text = f"Hello {user_name}! You said: {request.message}"
@@ -111,27 +114,28 @@ async def chat(
             "role": "assistant",
             "content": response_text,
             "citations": [],  # TODO: Add citations when implementing RAG
-            "created_at": datetime.utcnow()
+            "created_at": datetime.utcnow(),
         }
         assistant_msg_result = await db.chat_messages.insert_one(assistant_message_doc)
         assistant_msg_id = str(assistant_msg_result.inserted_id)
 
         metrics.chat_messages.add(1)
 
-        logger.info("chat_message_processed", user_id=user_id, session_id=session_id,
-                   message_id=assistant_msg_id)
+        logger.info(
+            "chat_message_processed",
+            user_id=user_id,
+            session_id=session_id,
+            message_id=assistant_msg_id,
+        )
 
         return ChatResponse(
-            response=response_text,
-            session_id=session_id,
-            message_id=assistant_msg_id
+            response=response_text, session_id=session_id, message_id=assistant_msg_id
         )
 
 
 @router.post("/sessions", response_model=ChatSessionResponse, status_code=201)
 async def create_chat_session(
-    session_data: ChatSessionCreate,
-    current_user: dict = Depends(get_current_user)
+    session_data: ChatSessionCreate, current_user: dict = Depends(get_current_user)
 ):
     """
     Create a new chat session.
@@ -153,7 +157,7 @@ async def create_chat_session(
             "user_id": ObjectId(user_id),
             "title": session_data.title or f"Chat {now.strftime('%Y-%m-%d %H:%M')}",
             "created_at": now,
-            "last_active_at": now
+            "last_active_at": now,
         }
 
         # Insert into database
@@ -169,15 +173,13 @@ async def create_chat_session(
             user_id=user_id,
             title=session_doc["title"],
             created_at=session_doc["created_at"],
-            last_active_at=session_doc["last_active_at"]
+            last_active_at=session_doc["last_active_at"],
         )
 
 
 @router.get("/sessions", response_model=list[ChatSessionResponse])
 async def list_chat_sessions(
-    current_user: dict = Depends(get_current_user),
-    limit: int = 50,
-    skip: int = 0
+    current_user: dict = Depends(get_current_user), limit: int = 50, skip: int = 0
 ):
     """
     List all chat sessions for the current user.
@@ -196,19 +198,24 @@ async def list_chat_sessions(
         db = get_db()
 
         # Query sessions
-        cursor = db.chat_sessions.find(
-            {"user_id": ObjectId(user_id)}
-        ).sort("last_active_at", -1).skip(skip).limit(limit)
+        cursor = (
+            db.chat_sessions.find({"user_id": ObjectId(user_id)})
+            .sort("last_active_at", -1)
+            .skip(skip)
+            .limit(limit)
+        )
 
         sessions = []
         async for session in cursor:
-            sessions.append(ChatSessionResponse(
-                id=str(session["_id"]),
-                user_id=user_id,
-                title=session["title"],
-                created_at=session["created_at"],
-                last_active_at=session["last_active_at"]
-            ))
+            sessions.append(
+                ChatSessionResponse(
+                    id=str(session["_id"]),
+                    user_id=user_id,
+                    title=session["title"],
+                    created_at=session["created_at"],
+                    last_active_at=session["last_active_at"],
+                )
+            )
 
         span.set_attribute("result.count", len(sessions))
 
@@ -219,10 +226,7 @@ async def list_chat_sessions(
 
 @router.get("/sessions/{session_id}/messages", response_model=list[ChatMessageResponse])
 async def get_session_messages(
-    session_id: str,
-    current_user: dict = Depends(get_current_user),
-    limit: int = 100,
-    skip: int = 0
+    session_id: str, current_user: dict = Depends(get_current_user), limit: int = 100, skip: int = 0
 ):
     """
     Get all messages for a specific chat session.
@@ -242,10 +246,9 @@ async def get_session_messages(
         # Verify session exists and belongs to user
         try:
             session_obj_id = ObjectId(session_id)
-            session = await db.chat_sessions.find_one({
-                "_id": session_obj_id,
-                "user_id": ObjectId(user_id)
-            })
+            session = await db.chat_sessions.find_one(
+                {"_id": session_obj_id, "user_id": ObjectId(user_id)}
+            )
 
             if not session:
                 logger.warning("session_not_found", user_id=user_id, session_id=session_id)
@@ -258,9 +261,12 @@ async def get_session_messages(
             raise HTTPException(status_code=400, detail="Invalid session ID format")
 
         # Query messages
-        cursor = db.chat_messages.find(
-            {"session_id": session_obj_id}
-        ).sort("created_at", 1).skip(skip).limit(limit)
+        cursor = (
+            db.chat_messages.find({"session_id": session_obj_id})
+            .sort("created_at", 1)
+            .skip(skip)
+            .limit(limit)
+        )
 
         messages = []
         async for msg in cursor:
@@ -268,22 +274,29 @@ async def get_session_messages(
                 Citation(
                     note_id=str(cit["note_id"]),
                     chunk_id=str(cit["chunk_id"]) if cit.get("chunk_id") else None,
-                    span=cit.get("span", {})
+                    span=cit.get("span", {}),
                 )
                 for cit in msg.get("citations", [])
             ]
 
-            messages.append(ChatMessageResponse(
-                id=str(msg["_id"]),
-                session_id=session_id,
-                role=msg["role"],
-                content=msg["content"],
-                citations=citations,
-                created_at=msg["created_at"]
-            ))
+            messages.append(
+                ChatMessageResponse(
+                    id=str(msg["_id"]),
+                    session_id=session_id,
+                    role=msg["role"],
+                    content=msg["content"],
+                    citations=citations,
+                    created_at=msg["created_at"],
+                )
+            )
 
         span.set_attribute("result.count", len(messages))
 
-        logger.info("session_messages_retrieved", user_id=user_id, session_id=session_id, count=len(messages))
+        logger.info(
+            "session_messages_retrieved",
+            user_id=user_id,
+            session_id=session_id,
+            count=len(messages),
+        )
 
         return messages
