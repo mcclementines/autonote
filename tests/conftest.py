@@ -1,47 +1,26 @@
 """Pytest configuration and shared fixtures."""
 
 import pytest
-from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi.testclient import TestClient
-import os
-
-
-@pytest.fixture(scope="session")
-def test_db_url():
-    """Database URL for testing."""
-    return os.getenv("MONGODB_TEST_URL", "mongodb://localhost:27017")
-
-
-@pytest.fixture(scope="session")
-def test_db_name():
-    """Database name for testing."""
-    return "autonote_test"
+import mongomock_motor
 
 
 @pytest.fixture
-async def db_client(test_db_url):
-    """Async MongoDB client fixture."""
-    client = AsyncIOMotorClient(test_db_url)
-    yield client
-    client.close()
+def api_client(monkeypatch):
+    """FastAPI test client fixture with lifespan context and mocked database."""
+    # Mock the MongoDB connection to use mongomock
+    monkeypatch.setenv("MONGODB_URL", "mongodb://localhost:27017")
+    monkeypatch.setenv("MONGODB_DATABASE", "autonote_test")
 
+    # Patch motor to use mongomock
+    import motor.motor_asyncio
+    original_client = motor.motor_asyncio.AsyncIOMotorClient
 
-@pytest.fixture
-async def clean_db(db_client, test_db_name):
-    """Clean database before each test."""
-    db = db_client[test_db_name]
+    def mock_client(*args, **kwargs):
+        return mongomock_motor.AsyncMongoMockClient()
 
-    # Drop all collections
-    collections = await db.list_collection_names()
-    for collection in collections:
-        await db[collection].drop()
+    monkeypatch.setattr("motor.motor_asyncio.AsyncIOMotorClient", mock_client)
 
-    yield db
-
-
-@pytest.fixture
-def api_client():
-    """FastAPI test client fixture with lifespan context."""
     from api.app import app
     with TestClient(app) as client:
         yield client
