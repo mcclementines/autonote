@@ -61,6 +61,21 @@ pytest --cov=api --cov=cli
 # Open http://localhost:8000/redoc for ReDoc
 ```
 
+### CI/CD Pipeline
+```bash
+# GitHub Actions automatically run on:
+# - Push to main, develop, or claude/** branches
+# - Pull requests to main or develop
+
+# CI pipeline includes:
+# - Lint and code quality checks (extensible)
+# - Test suite with coverage reports
+# - Security scanning (extensible)
+# - Build validation
+
+# See .github/workflows/README.md for details on extending the pipeline
+```
+
 ## Code Architecture
 
 ### Architecture Overview
@@ -308,6 +323,11 @@ The `/chat` endpoint in `api/app.py` is designed to be extended with:
     - `opentelemetry-instrumentation-httpx`: httpx auto-instrumentation
     - `opentelemetry-instrumentation-logging`: Logging integration
     - `opentelemetry-exporter-otlp`: OTLP exporter for production
+  - **Dev Dependencies**:
+    - `pytest`: Test framework
+    - `pytest-asyncio`: Async test support
+    - `pytest-cov`: Coverage reporting
+    - `mongomock-motor`: MongoDB mocking for tests
   - Requires Python >=3.13
 
 - `.env.example`: Template for environment configuration
