@@ -1,5 +1,7 @@
 """OpenTelemetry configuration and initialization for Autonote."""
 
+from __future__ import annotations
+
 import logging
 import os
 

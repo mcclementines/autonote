@@ -1,5 +1,7 @@
 """MongoDB database connection management."""
 
+from __future__ import annotations
+
 import os
 from time import time
 

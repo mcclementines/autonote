@@ -82,6 +82,7 @@ lint.ignore = [
     "B904",    # raise from - can be added in future improvements
     "RUF005",  # Iterable unpacking - minor optimization
     "PLW0603", # Global statement - intentional for metrics pattern
+    "TC003",   # Type-checking block imports - not needed with future annotations
 ]
 
 # Exclude common directories
