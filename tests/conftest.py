@@ -41,16 +41,18 @@ async def clean_db(db_client, test_db_name):
 
 @pytest.fixture
 def api_client():
-    """FastAPI test client fixture."""
+    """FastAPI test client fixture with lifespan context."""
     from api.app import app
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture
 def sample_user_data():
-    """Sample user data for testing."""
+    """Sample user data for testing with unique email per test."""
+    import uuid
     return {
-        "email": "test@example.com",
+        "email": f"test-{uuid.uuid4().hex[:8]}@example.com",
         "name": "Test User"
     }
 

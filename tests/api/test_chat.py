@@ -108,7 +108,7 @@ class TestChatEndpoints:
         """Test chat endpoint requires authentication."""
         response = api_client.post("/chat", json=sample_chat_message)
 
-        assert response.status_code == 401
+        assert response.status_code == 403  # FastAPI returns 403 for missing auth
 
     def test_chat_with_invalid_session(self, api_client, sample_user_data):
         """Test chat with non-existent session ID."""
