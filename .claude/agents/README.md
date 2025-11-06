@@ -1,8 +1,23 @@
-# Claude Code Subagents
+# Claude Code Agents
 
-This directory contains specialized Claude Code subagent configurations for the Autonote project.
+This directory contains specialized Claude Code agent configurations for the Autonote project.
 
-## Available Subagents
+## Agent Format
+
+Each agent is defined in a markdown file with YAML frontmatter:
+
+```markdown
+---
+name: agent-name
+description: Brief description of when this agent should be invoked
+tools: tool1, tool2, tool3  # Optional - inherits all tools if omitted
+model: sonnet  # Optional - specify model alias or 'inherit'
+---
+
+Agent's system prompt goes here...
+```
+
+## Available Agents
 
 ### 1. Test Writer (`test-writer`)
 **Purpose**: Write comprehensive unit tests for Python code using pytest.
@@ -15,7 +30,7 @@ This directory contains specialized Claude Code subagent configurations for the 
 
 **How to invoke**:
 ```
-Use the test-writer subagent to add tests for the new authentication endpoint
+Use the test-writer agent to add tests for the new authentication endpoint
 ```
 
 **What it does**:
@@ -39,7 +54,7 @@ Use the test-writer subagent to add tests for the new authentication endpoint
 
 **How to invoke**:
 ```
-Use the code-formatter subagent to format all Python files and fix linting issues
+Use the code-formatter agent to format all Python files and fix linting issues
 ```
 
 **What it does**:
@@ -53,7 +68,7 @@ Use the code-formatter subagent to format all Python files and fix linting issue
 
 ## CI Integration
 
-Both subagents are designed to ensure code passes the GitHub Actions CI pipeline defined in `.github/workflows/ci.yml`:
+Both agents are designed to ensure code passes the GitHub Actions CI pipeline defined in `.github/workflows/ci.yml`:
 
 ### Required Checks
 1. **Linting**: `ruff format --check .` and `ruff check .`
@@ -75,18 +90,18 @@ All formatting and linting rules are defined in `pyproject.toml`:
 ### Example 1: Add Tests for New Feature
 ```
 I just added a new endpoint in api/routes/users.py for user profile updates.
-Use the test-writer subagent to create comprehensive tests for this endpoint.
+Use the test-writer agent to create comprehensive tests for this endpoint.
 ```
 
 ### Example 2: Fix Formatting Before Commit
 ```
-Use the code-formatter subagent to format all files and ensure they pass CI checks.
+Use the code-formatter agent to format all files and ensure they pass CI checks.
 ```
 
 ### Example 3: Combined Workflow
 ```
-1. Use the code-formatter subagent to format and lint the code
-2. Use the test-writer subagent to add tests for the new chat export feature
+1. Use the code-formatter agent to format and lint the code
+2. Use the test-writer agent to add tests for the new chat export feature
 ```
 
 ---
@@ -95,8 +110,8 @@ Use the code-formatter subagent to format all files and ensure they pass CI chec
 
 ### Recommended Flow
 1. **Write Code**: Implement your feature or fix
-2. **Format**: Use `code-formatter` subagent
-3. **Test**: Use `test-writer` subagent to add tests
+2. **Format**: Use `code-formatter` agent
+3. **Test**: Use `test-writer` agent to add tests
 4. **Verify**: Run local checks before pushing
 
 ### Local Verification Commands
@@ -130,18 +145,27 @@ pytest --cov=api --cov=cli --cov-report=term
 
 ---
 
-## Subagent Development
+## Agent Development
 
-To add new subagents:
+To add new agents:
 
-1. Create a new markdown file in this directory: `.claude/subagents/your-agent.md`
-2. Follow the existing structure with clear sections:
+1. Create a new markdown file in this directory: `.claude/agents/your-agent.md`
+2. Add YAML frontmatter with required fields:
+   ```markdown
+   ---
+   name: your-agent-name
+   description: Brief description of when this agent should be invoked
+   tools: Bash, Read, Write, Edit  # Optional
+   model: sonnet  # Optional
+   ---
+   ```
+3. Follow the existing structure with clear sections:
    - Role description
    - Standards and requirements
    - Examples and patterns
    - Checklist for completion
    - Expected output format
-3. Update this README with the new subagent info
+4. Update this README with the new agent info
 
 ---
 
