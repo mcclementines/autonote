@@ -1,5 +1,11 @@
 """Tests for chat endpoints."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
+from openai.types.chat.chat_completion import Choice
+from openai.types.completion_usage import CompletionUsage
+
 
 class TestChatEndpoints:
     """Test chat endpoints."""
@@ -43,8 +49,41 @@ class TestChatEndpoints:
         assert sessions[0]["title"] == "Session 2"  # Most recent first
         assert sessions[1]["title"] == "Session 1"
 
-    def test_send_chat_message(self, api_client, sample_user_data, sample_chat_message):
+    @patch("api.routes.chat.OpenAIConnector")
+    @patch("os.getenv")
+    def test_send_chat_message(
+        self, mock_getenv, mock_connector_class, api_client, sample_user_data, sample_chat_message
+    ):
         """Test sending a chat message."""
+        # Mock environment variable
+        mock_getenv.return_value = "test-api-key"
+
+        # Mock OpenAI response
+        mock_completion = ChatCompletion(
+            id="test-completion",
+            model="gpt-4o-mini",
+            object="chat.completion",
+            created=1234567890,
+            choices=[
+                Choice(
+                    index=0,
+                    message=ChatCompletionMessage(
+                        role="assistant", content="This is a test response from OpenAI"
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+            usage=CompletionUsage(prompt_tokens=10, completion_tokens=20, total_tokens=30),
+        )
+
+        # Setup mock connector
+        mock_connector = AsyncMock()
+        mock_connector.chat_completion = AsyncMock(return_value=mock_completion)
+        mock_connector.estimate_cost = MagicMock(return_value=0.00045)
+        mock_connector.__aenter__ = AsyncMock(return_value=mock_connector)
+        mock_connector.__aexit__ = AsyncMock(return_value=None)
+        mock_connector_class.return_value = mock_connector
+
         # Register and get token
         auth_response = api_client.post("/auth/register", json=sample_user_data)
         token = auth_response.json()["access_token"]
@@ -57,8 +96,12 @@ class TestChatEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert "response" in data
+        assert data["response"] == "This is a test response from OpenAI"
         assert "session_id" in data
         assert "message_id" in data
+
+        # Verify OpenAI was called
+        mock_connector.chat_completion.assert_called_once()
 
     def test_get_session_messages(self, api_client, sample_user_data):
         """Test retrieving session messages."""
