@@ -1,10 +1,13 @@
 """Chat and chat session endpoints."""
 
+import os
 from datetime import datetime
 
 import structlog
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
+
+from connectors.openai import OpenAIConnector, OpenAIModel
 
 from ..auth import get_current_user
 from ..database import get_db
@@ -105,8 +108,63 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
         }
         _user_msg_result = await db.chat_messages.insert_one(user_message_doc)
 
-        # TODO: Replace with actual chat/processing logic (RAG, LLM, etc.)
-        response_text = f"Hello {user_name}! You said: {request.message}"
+        # Get OpenAI API key from environment
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("openai_api_key_missing", user_id=user_id)
+            raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+        # Retrieve conversation history for context
+        history_cursor = db.chat_messages.find({"session_id": session_obj_id}).sort("created_at", 1)
+        conversation_history = []
+        async for msg in history_cursor:
+            conversation_history.append({"role": msg["role"], "content": msg["content"]})
+
+        logger.info(
+            "conversation_history_retrieved",
+            user_id=user_id,
+            session_id=session_id,
+            message_count=len(conversation_history),
+        )
+
+        # Call OpenAI API
+        try:
+            async with OpenAIConnector(api_key=api_key) as connector:
+                # Send full conversation history for multi-turn context
+                completion = await connector.chat_completion(
+                    messages=conversation_history,
+                    model=OpenAIModel.GPT_4O_MINI,
+                    temperature=0.7,
+                )
+
+                response_text = completion.choices[0].message.content
+
+                # Log token usage and cost
+                if completion.usage:
+                    span.set_attribute("openai.prompt_tokens", completion.usage.prompt_tokens)
+                    span.set_attribute(
+                        "openai.completion_tokens", completion.usage.completion_tokens
+                    )
+                    span.set_attribute("openai.total_tokens", completion.usage.total_tokens)
+
+                    cost = connector.estimate_cost(
+                        model=OpenAIModel.GPT_4O_MINI,
+                        prompt_tokens=completion.usage.prompt_tokens,
+                        completion_tokens=completion.usage.completion_tokens,
+                    )
+                    span.set_attribute("openai.estimated_cost_usd", cost)
+                    logger.info(
+                        "openai_completion_success",
+                        user_id=user_id,
+                        session_id=session_id,
+                        prompt_tokens=completion.usage.prompt_tokens,
+                        completion_tokens=completion.usage.completion_tokens,
+                        cost_usd=cost,
+                    )
+
+        except Exception as e:
+            logger.error("openai_api_error", user_id=user_id, session_id=session_id, error=str(e))
+            raise HTTPException(status_code=500, detail=f"Failed to generate response: {e!s}")
 
         # Store assistant message
         assistant_message_doc = {
