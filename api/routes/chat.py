@@ -114,12 +114,25 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
             logger.error("openai_api_key_missing", user_id=user_id)
             raise HTTPException(status_code=500, detail="OpenAI API key not configured")
 
+        # Retrieve conversation history for context
+        history_cursor = db.chat_messages.find({"session_id": session_obj_id}).sort("created_at", 1)
+        conversation_history = []
+        async for msg in history_cursor:
+            conversation_history.append({"role": msg["role"], "content": msg["content"]})
+
+        logger.info(
+            "conversation_history_retrieved",
+            user_id=user_id,
+            session_id=session_id,
+            message_count=len(conversation_history),
+        )
+
         # Call OpenAI API
         try:
             async with OpenAIConnector(api_key=api_key) as connector:
-                # Simple single-turn conversation for now
+                # Send full conversation history for multi-turn context
                 completion = await connector.chat_completion(
-                    messages=[{"role": "user", "content": request.message}],
+                    messages=conversation_history,
                     model=OpenAIModel.GPT_4O_MINI,
                     temperature=0.7,
                 )
