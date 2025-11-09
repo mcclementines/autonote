@@ -1,5 +1,6 @@
 """Main CLI client with REPL loop."""
 
+import json
 import os
 
 import httpx
@@ -133,38 +134,89 @@ def main():
             # Get current session (optional - server will create if not provided)
             session_id = load_session()
 
-            # Send authenticated request to API with session support
+            # Send authenticated request to API with streaming support
             try:
                 payload = {"message": user_input}
                 if session_id:
                     payload["session_id"] = session_id
 
-                response = httpx.post(
-                    f"{API_URL}/chat",
-                    json=payload,
-                    headers={"Authorization": f"Bearer {token}"},
-                    timeout=10.0,
-                )
-                response.raise_for_status()
-                data = response.json()
+                # Use streaming endpoint for real-time responses
+                with (
+                    httpx.Client(timeout=60.0) as client,
+                    client.stream(
+                        "POST",
+                        f"{API_URL}/chat/stream",
+                        json=payload,
+                        headers={"Authorization": f"Bearer {token}"},
+                    ) as response,
+                ):
+                    response.raise_for_status()
 
-                # Save session ID if it was auto-created
-                if not session_id and data.get("session_id"):
-                    save_session(data["session_id"])
-                    print(f"[New session created: {data['session_id']}]")
+                    # Print assistant prefix
+                    print("Assistant: ", end="", flush=True)
 
-                # Display assistant response
-                print(f"Assistant: {data['response']}")
+                    full_response = ""
+                    citations = []
+                    message_session_id = session_id
 
-                # Display citations if present
-                citations = data.get("citations", [])
-                if citations:
-                    print("\nReferences:")
-                    for i, citation in enumerate(citations, 1):
-                        note_id = citation.get("note_id", "unknown")
-                        print(f"  [{i}] Note ID: {note_id}")
+                    # Process Server-Sent Events
+                    for line in response.iter_lines():
+                        if line.startswith("data: "):
+                            data_str = line[6:]  # Remove "data: " prefix
+                            try:
+                                data = json.loads(data_str)
+                                event_type = data.get("type")
 
-                print()  # Empty line for spacing
+                                if event_type == "session":
+                                    # New session created
+                                    message_session_id = data.get("session_id")
+                                    if not session_id:
+                                        save_session(message_session_id)
+                                        # Don't print this during streaming to avoid interrupting output
+
+                                elif event_type == "content":
+                                    # Stream content chunk
+                                    chunk = data.get("content", "")
+                                    full_response += chunk
+                                    print(chunk, end="", flush=True)
+
+                                elif event_type == "citations":
+                                    # Store citations for display after response
+                                    citations = data.get("citations", [])
+
+                                elif event_type == "done":
+                                    # Stream complete
+                                    message_session_id = data.get("session_id")
+                                    # Save session if it was auto-created
+                                    if not session_id and message_session_id:
+                                        save_session(message_session_id)
+
+                                elif event_type == "error":
+                                    # Error occurred during streaming
+                                    error_msg = data.get("error", "Unknown error")
+                                    print(f"\n\nError: {error_msg}\n")
+                                    break
+
+                            except json.JSONDecodeError:
+                                # Skip malformed JSON
+                                continue
+
+                    # Print newline after streaming completes
+                    print()
+
+                    # Show session info if newly created
+                    if not session_id and message_session_id:
+                        print(f"[New session created: {message_session_id}]")
+
+                    # Display citations if present
+                    if citations:
+                        print("\nReferences:")
+                        for i, citation in enumerate(citations, 1):
+                            note_id = citation.get("note_id", "unknown")
+                            print(f"  [{i}] Note ID: {note_id}")
+
+                    print()  # Empty line for spacing
+
             except httpx.ConnectError:
                 print("Error: Could not connect to API server.")
                 print("Please start the server with: python -m api.server\n")
