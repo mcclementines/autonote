@@ -1,10 +1,13 @@
 """Notes endpoints."""
 
+import os
 from datetime import datetime
 
 import structlog
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
+
+from connectors.openai import OpenAIConnector, OpenAIModel
 
 from ..auth import get_current_user
 from ..database import get_db
@@ -41,6 +44,33 @@ async def create_note(note: NoteCreate, current_user: dict = Depends(get_current
 
         # Calculate word count
         word_count = len(note.content_md.split())
+
+        # Generate embedding for semantic search
+        # Combine title and content for richer semantic representation
+        embedding_text = f"{note.title}\n\n{note.content_md}"
+        embedding_vector = None
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            try:
+                async with OpenAIConnector(api_key=api_key) as connector:
+                    embedding_response = await connector.embeddings(
+                        input_text=embedding_text,
+                        model=OpenAIModel.TEXT_EMBEDDING_3_SMALL,
+                        dimensions=1536,  # Standard dimension for text-embedding-3-small
+                    )
+                    embedding_vector = embedding_response.data[0].embedding
+                    span.set_attribute("embedding.generated", True)
+                    logger.info("embedding_generated", user_id=user_id, title=note.title)
+            except Exception as e:
+                # Don't fail note creation if embedding fails
+                logger.warning(
+                    "embedding_generation_failed", user_id=user_id, title=note.title, error=str(e)
+                )
+                span.set_attribute("embedding.generated", False)
+        else:
+            logger.warning("openai_api_key_missing_for_embedding", user_id=user_id)
+            span.set_attribute("embedding.generated", False)
 
         # Validate notebook_id if provided
         notebook_obj_id = None
@@ -84,6 +114,7 @@ async def create_note(note: NoteCreate, current_user: dict = Depends(get_current
             "version": 1,
             "word_count": word_count,
             "links_out": [],
+            "embedding": embedding_vector,  # Store embedding for vector search
         }
 
         # Insert into database

@@ -21,6 +21,7 @@ class ChatResponse(BaseModel):
     response: str
     session_id: str
     message_id: str
+    citations: list[Citation] = Field(default_factory=list)
 
 
 class ChatSessionCreate(BaseModel):
