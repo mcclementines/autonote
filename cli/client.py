@@ -1,5 +1,7 @@
 """Main CLI client with REPL loop."""
 
+import os
+
 import httpx
 
 from .commands import (
@@ -29,6 +31,8 @@ def main():
     print("  /history - View conversation history for current session")
     print("\nNote Commands:")
     print("  /note - Create a new note with multi-line markdown")
+    print("\nUtility Commands:")
+    print("  /clear - Clear the terminal screen")
     print("\nType 'exit' or 'quit' to end the conversation.")
     print("Note: Make sure the API server is running (python -m api.server)\n")
 
@@ -81,6 +85,11 @@ def main():
 
             if user_input.lower() == "/history":
                 view_history()
+                continue
+
+            if user_input.lower() == "/clear":
+                # Clear terminal screen (cross-platform)
+                os.system("cls" if os.name == "nt" else "clear")
                 continue
 
             # Check authentication for chat
