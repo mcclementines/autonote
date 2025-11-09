@@ -153,7 +153,18 @@ def main():
                     save_session(data["session_id"])
                     print(f"[New session created: {data['session_id']}]")
 
-                print(f"Assistant: {data['response']}\n")
+                # Display assistant response
+                print(f"Assistant: {data['response']}")
+
+                # Display citations if present
+                citations = data.get("citations", [])
+                if citations:
+                    print("\nReferences:")
+                    for i, citation in enumerate(citations, 1):
+                        note_id = citation.get("note_id", "unknown")
+                        print(f"  [{i}] Note ID: {note_id}")
+
+                print()  # Empty line for spacing
             except httpx.ConnectError:
                 print("Error: Could not connect to API server.")
                 print("Please start the server with: python -m api.server\n")

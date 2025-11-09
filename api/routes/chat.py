@@ -20,6 +20,8 @@ from ..models import (
     Citation,
 )
 from ..observability import get_app_metrics, get_tracer
+from ..prompts import get_default_system_prompt, get_rag_system_prompt
+from ..services import NoteRetrieval
 
 # Initialize logger
 logger = structlog.get_logger(__name__)
@@ -108,31 +110,57 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
         }
         _user_msg_result = await db.chat_messages.insert_one(user_message_doc)
 
+        # Retrieve relevant notes for RAG using hybrid search
+        # keyword_weight=0.3, vector_weight=0.7 favors semantic understanding
+        retrieval = NoteRetrieval(
+            top_k=3, max_tokens_per_note=500, keyword_weight=0.3, vector_weight=0.7
+        )
+        relevant_notes = await retrieval.hybrid_retrieve(user_id=user_id, query=request.message)
+
+        span.set_attribute("rag.notes_retrieved", len(relevant_notes))
+        logger.info("notes_retrieved_for_rag", user_id=user_id, count=len(relevant_notes))
+
+        # Get conversation history from this session (last 10 messages)
+        history_cursor = (
+            db.chat_messages.find({"session_id": session_obj_id}).sort("created_at", -1).limit(10)
+        )
+        history_messages = []
+        async for msg in history_cursor:
+            history_messages.append(msg)
+
+        # Reverse to get chronological order
+        history_messages.reverse()
+
+        # Build messages for OpenAI
+        messages = []
+
+        # System message with RAG context
+        if relevant_notes:
+            context = retrieval.format_notes_for_context(relevant_notes)
+            system_prompt = get_rag_system_prompt(context)
+            messages.append({"role": "system", "content": system_prompt})
+        else:
+            messages.append({"role": "system", "content": get_default_system_prompt()})
+
+        # Add conversation history (exclude the message we just added)
+        for msg in history_messages[:-1]:  # Skip the last one (current message)
+            messages.append({"role": msg["role"], "content": msg["content"]})
+
+        # Add current user message
+        messages.append({"role": "user", "content": request.message})
+
         # Get OpenAI API key from environment
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             logger.error("openai_api_key_missing", user_id=user_id)
             raise HTTPException(status_code=500, detail="OpenAI API key not configured")
 
-        # Retrieve conversation history for context
-        history_cursor = db.chat_messages.find({"session_id": session_obj_id}).sort("created_at", 1)
-        conversation_history = []
-        async for msg in history_cursor:
-            conversation_history.append({"role": msg["role"], "content": msg["content"]})
-
-        logger.info(
-            "conversation_history_retrieved",
-            user_id=user_id,
-            session_id=session_id,
-            message_count=len(conversation_history),
-        )
-
         # Call OpenAI API
         try:
             async with OpenAIConnector(api_key=api_key) as connector:
-                # Send full conversation history for multi-turn context
+                # Send messages with RAG context and conversation history
                 completion = await connector.chat_completion(
-                    messages=conversation_history,
+                    messages=messages,
                     model=OpenAIModel.GPT_4O_MINI,
                     temperature=0.7,
                 )
@@ -166,12 +194,18 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
             logger.error("openai_api_error", user_id=user_id, session_id=session_id, error=str(e))
             raise HTTPException(status_code=500, detail=f"Failed to generate response: {e!s}")
 
-        # Store assistant message
+        # Extract citations from response
+        citations = retrieval.extract_citations_from_response(response_text, relevant_notes)
+
+        span.set_attribute("rag.citations_found", len(citations))
+        logger.info("citations_extracted", user_id=user_id, count=len(citations))
+
+        # Store assistant message with citations
         assistant_message_doc = {
             "session_id": session_obj_id,
             "role": "assistant",
             "content": response_text,
-            "citations": [],  # TODO: Add citations when implementing RAG
+            "citations": citations,
             "created_at": datetime.utcnow(),
         }
         assistant_msg_result = await db.chat_messages.insert_one(assistant_message_doc)
@@ -186,8 +220,21 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
             message_id=assistant_msg_id,
         )
 
+        # Convert citations to response format
+        citation_responses = [
+            Citation(
+                note_id=str(cit["note_id"]),
+                chunk_id=str(cit["chunk_id"]) if cit.get("chunk_id") else None,
+                span=cit.get("span", {}),
+            )
+            for cit in citations
+        ]
+
         return ChatResponse(
-            response=response_text, session_id=session_id, message_id=assistant_msg_id
+            response=response_text,
+            session_id=session_id,
+            message_id=assistant_msg_id,
+            citations=citation_responses,
         )
 
 
