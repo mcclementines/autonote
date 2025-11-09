@@ -9,7 +9,7 @@ from .chat import (
     ChatSessionResponse,
     Citation,
 )
-from .notes import LinkOut, NoteCreate, NoteResponse
+from .notes import LinkOut, NoteCreate, NoteListResponse, NoteResponse, NoteUpdate
 
 __all__ = [
     "AuthResponse",
@@ -24,7 +24,9 @@ __all__ = [
     "LinkOut",
     "LoginRequest",
     "NoteCreate",
+    "NoteListResponse",
     "NoteResponse",
+    "NoteUpdate",
     # Auth models
     "UserCreate",
     "UserResponse",
