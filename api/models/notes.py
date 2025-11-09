@@ -41,3 +41,23 @@ class NoteResponse(BaseModel):
     version: int
     word_count: int
     links_out: list[LinkOut] = Field(default_factory=list)
+
+
+class NoteUpdate(BaseModel):
+    """Request model for updating a note.
+
+    All fields are optional - only provided fields will be updated.
+    """
+
+    title: str | None = Field(None, min_length=1, max_length=500)
+    content_md: str | None = Field(None, min_length=1)
+    tags: list[str] | None = None
+    pinned: bool | None = None
+    status: Literal["active", "archived", "trashed"] | None = None
+
+
+class NoteListResponse(BaseModel):
+    """Response model for listing notes."""
+
+    notes: list[NoteResponse]
+    total: int
