@@ -379,9 +379,7 @@ class NoteRetrieval:
 
         return "\n".join(context_parts)
 
-    def extract_citations_from_response(
-        self, response_text: str, notes: list[dict]
-    ) -> list[dict]:
+    def extract_citations_from_response(self, response_text: str, notes: list[dict]) -> list[dict]:
         """Extract citations from LLM response.
 
         Simple extraction: looks for [1], [2], etc. in the response and maps

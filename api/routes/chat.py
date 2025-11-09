@@ -122,9 +122,7 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
 
         # Get conversation history from this session (last 10 messages)
         history_cursor = (
-            db.chat_messages.find({"session_id": session_obj_id})
-            .sort("created_at", -1)
-            .limit(10)
+            db.chat_messages.find({"session_id": session_obj_id}).sort("created_at", -1).limit(10)
         )
         history_messages = []
         async for msg in history_cursor:
