@@ -1,16 +1,22 @@
 """Main CLI client with REPL loop."""
 
+import os
+
 import httpx
 
 from .commands import (
     create_note,
+    list_notes,
     list_sessions,
     login_user,
     logout_user,
     new_session,
     register_user,
+    rename_note,
     switch_session,
+    update_note,
     view_history,
+    view_note,
 )
 from .config import API_URL, delete_session, delete_token, load_session, load_token, save_session
 
@@ -29,6 +35,12 @@ def main():
     print("  /history - View conversation history for current session")
     print("\nNote Commands:")
     print("  /note - Create a new note with multi-line markdown")
+    print("  /notes [status] - List all notes (optional: active, archived, trashed)")
+    print("  /view <note_id> - View a specific note")
+    print("  /rename <note_id> <new_title> - Rename a note")
+    print("  /update <note_id> - Update note content")
+    print("\nUtility Commands:")
+    print("  /clear - Clear the terminal screen")
     print("\nType 'exit' or 'quit' to end the conversation.")
     print("Note: Make sure the API server is running (python -m api.server)\n")
 
@@ -67,6 +79,30 @@ def main():
                 create_note()
                 continue
 
+            if user_input.lower().startswith("/notes"):
+                # Extract optional status argument
+                args = user_input[6:].strip()  # Skip "/notes"
+                list_notes(args)
+                continue
+
+            if user_input.lower().startswith("/view "):
+                # Extract note_id argument
+                note_id = user_input[6:].strip()  # Skip "/view "
+                view_note(note_id)
+                continue
+
+            if user_input.lower().startswith("/rename "):
+                # Extract arguments
+                args = user_input[8:].strip()  # Skip "/rename "
+                rename_note(args)
+                continue
+
+            if user_input.lower().startswith("/update "):
+                # Extract note_id argument
+                note_id = user_input[8:].strip()  # Skip "/update "
+                update_note(note_id)
+                continue
+
             if user_input.lower() == "/new":
                 new_session()
                 continue
@@ -81,6 +117,11 @@ def main():
 
             if user_input.lower() == "/history":
                 view_history()
+                continue
+
+            if user_input.lower() == "/clear":
+                # Clear terminal screen (cross-platform)
+                os.system("cls" if os.name == "nt" else "clear")
                 continue
 
             # Check authentication for chat

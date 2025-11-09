@@ -11,7 +11,7 @@ from connectors.openai import OpenAIConnector, OpenAIModel
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import NoteCreate, NoteResponse
+from ..models import NoteCreate, NoteListResponse, NoteResponse, NoteUpdate
 from ..observability import get_tracer
 
 # Initialize logger
@@ -144,5 +144,235 @@ async def create_note(note: NoteCreate, current_user: dict = Depends(get_current
         logger.info(
             "note_created_successfully", note_id=note_id, user_id=user_id, word_count=word_count
         )
+
+        return note_response
+
+
+@router.get("", response_model=NoteListResponse)
+async def list_notes(
+    status: str | None = None,
+    limit: int = 100,
+    skip: int = 0,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List all notes for the authenticated user.
+
+    Optionally filter by status (active, archived, trashed).
+    Supports pagination with limit and skip parameters.
+    """
+    with tracer.start_as_current_span("list_notes") as span:
+        user_id = str(current_user.get("_id"))
+
+        span.set_attribute("user.id", user_id)
+        span.set_attribute("query.limit", limit)
+        span.set_attribute("query.skip", skip)
+
+        db = get_db()
+
+        # Build query
+        query = {"author_id": ObjectId(user_id)}
+        if status:
+            if status not in ["active", "archived", "trashed"]:
+                raise HTTPException(status_code=400, detail="Invalid status value")
+            query["status"] = status
+            span.set_attribute("query.status", status)
+
+        # Get total count
+        total = await db.notes.count_documents(query)
+
+        # Fetch notes with pagination, sorted by updated_at descending
+        cursor = db.notes.find(query).sort("updated_at", -1).skip(skip).limit(limit)
+        notes_docs = await cursor.to_list(length=limit)
+
+        # Convert to response models
+        notes = []
+        for doc in notes_docs:
+            notes.append(
+                NoteResponse(
+                    id=str(doc["_id"]),
+                    notebook_id=str(doc["notebook_id"]) if doc.get("notebook_id") else None,
+                    author_id=str(doc["author_id"]),
+                    title=doc["title"],
+                    content_md=doc["content_md"],
+                    tags=doc.get("tags", []),
+                    status=doc["status"],
+                    pinned=doc.get("pinned", False),
+                    created_at=doc["created_at"],
+                    updated_at=doc["updated_at"],
+                    version=doc.get("version", 1),
+                    word_count=doc.get("word_count", 0),
+                    links_out=doc.get("links_out", []),
+                )
+            )
+
+        span.set_attribute("notes.count", len(notes))
+        span.set_attribute("notes.total", total)
+
+        logger.info("notes_listed", user_id=user_id, count=len(notes), total=total)
+
+        return NoteListResponse(notes=notes, total=total)
+
+
+@router.get("/{note_id}", response_model=NoteResponse)
+async def get_note(note_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Retrieve a specific note by ID.
+
+    Requires authentication and ownership of the note.
+    """
+    with tracer.start_as_current_span("get_note") as span:
+        user_id = str(current_user.get("_id"))
+
+        span.set_attribute("user.id", user_id)
+        span.set_attribute("note.id", note_id)
+
+        db = get_db()
+
+        # Validate note_id format
+        try:
+            note_obj_id = ObjectId(note_id)
+        except Exception:
+            logger.warning("get_note_invalid_id", user_id=user_id, note_id=note_id)
+            raise HTTPException(status_code=400, detail="Invalid note ID format")
+
+        # Fetch note
+        note_doc = await db.notes.find_one({"_id": note_obj_id, "author_id": ObjectId(user_id)})
+
+        if not note_doc:
+            logger.warning("get_note_not_found", user_id=user_id, note_id=note_id)
+            raise HTTPException(status_code=404, detail="Note not found")
+
+        # Convert to response model
+        note_response = NoteResponse(
+            id=str(note_doc["_id"]),
+            notebook_id=str(note_doc["notebook_id"]) if note_doc.get("notebook_id") else None,
+            author_id=str(note_doc["author_id"]),
+            title=note_doc["title"],
+            content_md=note_doc["content_md"],
+            tags=note_doc.get("tags", []),
+            status=note_doc["status"],
+            pinned=note_doc.get("pinned", False),
+            created_at=note_doc["created_at"],
+            updated_at=note_doc["updated_at"],
+            version=note_doc.get("version", 1),
+            word_count=note_doc.get("word_count", 0),
+            links_out=note_doc.get("links_out", []),
+        )
+
+        logger.info("note_retrieved", user_id=user_id, note_id=note_id)
+
+        return note_response
+
+
+@router.patch("/{note_id}", response_model=NoteResponse)
+async def update_note(
+    note_id: str, note_update: NoteUpdate, current_user: dict = Depends(get_current_user)
+):
+    """
+    Update a note.
+
+    Supports partial updates - only provided fields will be updated.
+    Increments version number on each update.
+    """
+    with tracer.start_as_current_span("update_note") as span:
+        user_id = str(current_user.get("_id"))
+
+        span.set_attribute("user.id", user_id)
+        span.set_attribute("note.id", note_id)
+
+        db = get_db()
+
+        # Validate note_id format
+        try:
+            note_obj_id = ObjectId(note_id)
+        except Exception:
+            logger.warning("update_note_invalid_id", user_id=user_id, note_id=note_id)
+            raise HTTPException(status_code=400, detail="Invalid note ID format")
+
+        # Check if note exists and belongs to user
+        existing_note = await db.notes.find_one(
+            {"_id": note_obj_id, "author_id": ObjectId(user_id)}
+        )
+
+        if not existing_note:
+            logger.warning("update_note_not_found", user_id=user_id, note_id=note_id)
+            raise HTTPException(status_code=404, detail="Note not found")
+
+        # Build update document with only provided fields
+        update_doc = {}
+        if note_update.title is not None:
+            update_doc["title"] = note_update.title
+            span.set_attribute("note.title_updated", True)
+
+        if note_update.content_md is not None:
+            update_doc["content_md"] = note_update.content_md
+            # Recalculate word count
+            update_doc["word_count"] = len(note_update.content_md.split())
+            span.set_attribute("note.content_updated", True)
+
+        if note_update.tags is not None:
+            update_doc["tags"] = note_update.tags
+            span.set_attribute("note.tags_updated", True)
+
+        if note_update.pinned is not None:
+            update_doc["pinned"] = note_update.pinned
+            span.set_attribute("note.pinned_updated", True)
+
+        if note_update.status is not None:
+            update_doc["status"] = note_update.status
+            span.set_attribute("note.status_updated", True)
+
+        # If nothing to update, return current note
+        if not update_doc:
+            logger.info("update_note_no_changes", user_id=user_id, note_id=note_id)
+            return NoteResponse(
+                id=str(existing_note["_id"]),
+                notebook_id=(
+                    str(existing_note["notebook_id"]) if existing_note.get("notebook_id") else None
+                ),
+                author_id=str(existing_note["author_id"]),
+                title=existing_note["title"],
+                content_md=existing_note["content_md"],
+                tags=existing_note.get("tags", []),
+                status=existing_note["status"],
+                pinned=existing_note.get("pinned", False),
+                created_at=existing_note["created_at"],
+                updated_at=existing_note["updated_at"],
+                version=existing_note.get("version", 1),
+                word_count=existing_note.get("word_count", 0),
+                links_out=existing_note.get("links_out", []),
+            )
+
+        # Update timestamp and increment version
+        update_doc["updated_at"] = datetime.utcnow()
+        update_doc["version"] = existing_note.get("version", 1) + 1
+
+        # Perform update
+        await db.notes.update_one({"_id": note_obj_id}, {"$set": update_doc})
+
+        # Fetch updated note
+        updated_note = await db.notes.find_one({"_id": note_obj_id})
+
+        # Convert to response model
+        note_response = NoteResponse(
+            id=str(updated_note["_id"]),
+            notebook_id=str(updated_note["notebook_id"])
+            if updated_note.get("notebook_id")
+            else None,
+            author_id=str(updated_note["author_id"]),
+            title=updated_note["title"],
+            content_md=updated_note["content_md"],
+            tags=updated_note.get("tags", []),
+            status=updated_note["status"],
+            pinned=updated_note.get("pinned", False),
+            created_at=updated_note["created_at"],
+            updated_at=updated_note["updated_at"],
+            version=updated_note.get("version", 1),
+            word_count=updated_note.get("word_count", 0),
+            links_out=updated_note.get("links_out", []),
+        )
+
+        logger.info("note_updated_successfully", user_id=user_id, note_id=note_id)
 
         return note_response

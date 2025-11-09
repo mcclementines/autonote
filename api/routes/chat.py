@@ -160,6 +160,7 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
         # Call OpenAI API
         try:
             async with OpenAIConnector(api_key=api_key) as connector:
+                # Send messages with RAG context and conversation history
                 completion = await connector.chat_completion(
                     messages=messages,
                     model=OpenAIModel.GPT_4O_MINI,

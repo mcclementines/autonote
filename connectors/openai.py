@@ -14,11 +14,13 @@ from collections.abc import AsyncIterator
 from enum import Enum
 from typing import Any
 
+import structlog
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from openai.types.create_embedding_response import CreateEmbeddingResponse
 from opentelemetry import trace
 
+logger = structlog.get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 
 
@@ -350,4 +352,10 @@ class OpenAIConnector:
                 return input_cost + output_cost
 
         # Default fallback estimate (GPT-4o-mini pricing)
+        logger.warning(
+            "unknown_model_cost_estimation",
+            model=model_str,
+            fallback_model="gpt-4o-mini",
+            message="Using fallback pricing for unknown model",
+        )
         return (prompt_tokens / 1_000_000) * 0.15 + (completion_tokens / 1_000_000) * 0.60
