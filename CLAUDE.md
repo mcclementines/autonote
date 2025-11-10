@@ -109,6 +109,67 @@ ruff check . && ruff format --check .
 # See .github/workflows/README.md for details on extending the pipeline
 ```
 
+### MongoDB Atlas Search Setup (Optional but Recommended)
+
+Autonote supports **MongoDB Atlas Search** and **Atlas Vector Search** for dramatically improved search performance and relevance. This is optional but highly recommended for production deployments.
+
+**Performance Benefits:**
+- 50-500x faster vector search (using native HNSW indexing)
+- Better text search relevance (Lucene-based with fuzzy matching)
+- Scalable to millions of notes
+- Single-pipeline hybrid search
+
+**Setup Steps:**
+
+1. **Ensure you have a MongoDB Atlas cluster** (not local MongoDB)
+   - Atlas Search features are only available on MongoDB Atlas
+   - Free tier (M0) supports Atlas Search with limitations
+
+2. **Run the index setup helper:**
+   ```bash
+   python -m scripts.setup_atlas_indexes
+   ```
+   This script will:
+   - Verify your Atlas connection
+   - Generate index configurations
+   - Save JSON files you can import
+   - Show step-by-step instructions
+
+3. **Create indexes in Atlas UI:**
+   - Log in to [MongoDB Atlas](https://cloud.mongodb.com)
+   - Navigate to your cluster → "Atlas Search" tab
+   - Click "Create Search Index"
+   - Create **two indexes** using configurations from the script:
+     - `notes_vector_index`: For semantic vector search
+     - `notes_search_index`: For advanced text search
+
+4. **Wait for indexes to build** (typically 1-5 minutes)
+
+5. **Enable Atlas Search in your environment:**
+   ```bash
+   # In your .env file
+   MONGODB_ATLAS_SEARCH=true
+   ```
+
+6. **Restart your application**
+   ```bash
+   python -m api.server
+   ```
+
+**Verification:**
+- Watch application logs for "atlas_search" or "atlas_vector_search" in search operations
+- Performance should be dramatically improved for vector search
+- Text search quality will be enhanced with better relevance scoring
+
+**Fallback Behavior:**
+- If Atlas Search is disabled or indexes don't exist, the app automatically falls back to basic search
+- No data loss or errors - just slower performance
+- Safe to develop locally without Atlas
+
+**Learn More:**
+- [Atlas Search Documentation](https://www.mongodb.com/docs/atlas/atlas-search/)
+- [Atlas Vector Search Documentation](https://www.mongodb.com/docs/atlas/atlas-vector-search/vector-search-overview/)
+
 ## Code Architecture
 
 ### Architecture Overview
@@ -129,12 +190,18 @@ autonote/
 │   │   ├── auth.py        # Auth models (UserCreate, UserResponse, etc.)
 │   │   ├── chat.py        # Chat models (ChatRequest, ChatResponse, etc.)
 │   │   └── notes.py       # Notes models (NoteCreate, NoteResponse, etc.)
-│   └── routes/            # Route handlers by domain
+│   ├── routes/            # Route handlers by domain
+│   │   ├── __init__.py
+│   │   ├── health.py      # Health check endpoints
+│   │   ├── auth.py        # Authentication endpoints
+│   │   ├── chat.py        # Chat endpoints
+│   │   └── notes.py       # Notes endpoints
+│   └── services/          # Business logic services
 │       ├── __init__.py
-│       ├── health.py      # Health check endpoints
-│       ├── auth.py        # Authentication endpoints
-│       ├── chat.py        # Chat endpoints
-│       └── notes.py       # Notes endpoints
+│       └── retrieval.py   # Hybrid search for RAG (Atlas Search + fallback)
+├── scripts/               # Management scripts
+│   ├── __init__.py
+│   └── setup_atlas_indexes.py  # Atlas Search index setup helper
 ├── cli/                   # CLI client (frontend)
 │   ├── __init__.py
 │   ├── client.py          # Main REPL loop
@@ -206,6 +273,21 @@ autonote/
   - Configurable exporters (console for dev, OTLP for prod)
   - Custom application metrics (registrations, logins, chat messages, auth failures)
   - Automatic log correlation with trace context
+
+- `api/services/retrieval.py`: Hybrid search service for RAG
+  - Combines keyword search and vector similarity search
+  - **Atlas Search Mode** (when `MONGODB_ATLAS_SEARCH=true`):
+    - Uses native `$vectorSearch` for 50-500x faster vector search
+    - Uses native `$search` for improved text relevance
+    - HNSW indexing for sub-millisecond similarity search
+    - Scalable to millions of notes
+  - **Fallback Mode** (local MongoDB or Atlas disabled):
+    - Uses `$text` operator for keyword search
+    - In-memory cosine similarity for vector search (slow, doesn't scale)
+  - Automatic fallback if Atlas indexes unavailable
+  - Configurable hybrid scoring weights (default: 30% keyword, 70% vector)
+  - Citation extraction for source attribution
+  - Full OpenTelemetry instrumentation
 
 **CLI Client (`cli/`)**
 - `cli/client.py`: Main REPL loop

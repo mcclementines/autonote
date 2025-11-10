@@ -1,0 +1,33 @@
+{
+  "name": "notes_search_index",
+  "type": "search",
+  "definition": {
+    "mappings": {
+      "dynamic": false,
+      "fields": {
+        "title": {
+          "type": "string",
+          "analyzer": "lucene.standard"
+        },
+        "content_md": {
+          "type": "string",
+          "analyzer": "lucene.standard"
+        },
+        "tags": {
+          "type": "string",
+          "analyzer": "lucene.keyword"
+        },
+        "status": {
+          "type": "string",
+          "analyzer": "lucene.keyword"
+        },
+        "author_id": {
+          "type": "objectId"
+        },
+        "created_at": {
+          "type": "date"
+        }
+      }
+    }
+  }
+}

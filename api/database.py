@@ -106,9 +106,27 @@ class Database:
             await cls.db.notes.create_index("created_at")
             logger.debug("index_ensured", collection="notes", field="created_at")
 
-            # Text search index on title and content (useful for basic search)
-            await cls.db.notes.create_index([("title", "text"), ("content", "text")])
-            logger.debug("text_index_ensured", collection="notes", fields=["title", "content"])
+            # Index for filtering by author and status
+            await cls.db.notes.create_index([("author_id", 1), ("status", 1)])
+            logger.debug(
+                "compound_index_ensured", collection="notes", fields=["author_id", "status"]
+            )
+
+            # Basic text search index on title and content_md (fallback for non-Atlas deployments)
+            # Note: If using Atlas Search, this index is not needed but harmless to have
+            await cls.db.notes.create_index(
+                [("title", "text"), ("content_md", "text")], name="notes_basic_text_index"
+            )
+            logger.debug("text_index_ensured", collection="notes", fields=["title", "content_md"])
+
+            # Atlas Search Indexes (must be created via Atlas UI or Admin API):
+            # - notes_vector_index: Vector search on 'embedding' field
+            # - notes_search_index: Full-text search on 'title' and 'content_md'
+            # See: python -m scripts.setup_atlas_indexes for setup instructions
+            logger.info(
+                "atlas_indexes_note",
+                message="Atlas Search indexes must be created separately via Atlas UI",
+            )
 
     @classmethod
     async def disconnect(cls) -> None:
