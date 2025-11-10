@@ -160,14 +160,21 @@ class NoteRetrieval:
                 "$search": {
                     "index": "notes_search_index",
                     "compound": {
-                        "must": [
+                        "should": [
                             {
                                 "text": {
                                     "query": query,
-                                    "path": ["title", "content_md"],
-                                    "score": {"boost": {"path": "title", "value": 2.0}},
+                                    "path": "title",
+                                    "score": {"boost": {"value": 2.0}},
                                 }
-                            }
+                            },
+                            {
+                                "text": {
+                                    "query": query,
+                                    "path": "content_md",
+                                    "score": {"boost": {"value": 1.0}},
+                                }
+                            },
                         ],
                         "filter": [
                             {"equals": {"path": "author_id", "value": ObjectId(user_id)}},

@@ -21,7 +21,11 @@ import re
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Atlas Vector Search Index Configuration
 VECTOR_SEARCH_INDEX = {
