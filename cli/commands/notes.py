@@ -1,6 +1,11 @@
 """Notes command handlers."""
 
+import os
+import subprocess
+import sys
+import tempfile
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 
@@ -280,8 +285,36 @@ def rename_note(args: str):
         print(f"Error: API request failed: {e}\n")
 
 
+def _get_editor():
+    """Get the user's preferred text editor."""
+    # Try environment variables first
+    editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+    if editor:
+        return editor
+
+    # Platform-specific defaults
+    if sys.platform == "win32":
+        return "notepad"
+    # Try common Unix editors in order of preference
+    for editor_cmd in ["nano", "vim", "vi"]:
+        try:
+            # Check if editor exists
+            subprocess.run(
+                ["which", editor_cmd],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            return editor_cmd
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+
+    # Fallback to vi (should exist on all Unix systems)
+    return "vi"
+
+
 def update_note(note_id: str):
-    """Update note content."""
+    """Update note content using an external text editor."""
     if not note_id or not note_id.strip():
         print("Error: Note ID is required. Usage: /update <note_id>\n")
         return
@@ -293,46 +326,20 @@ def update_note(note_id: str):
         print("Error: You must be logged in to update notes. Use /register or /login.\n")
         return
 
-    print("\n=== Update Note Content ===")
-    print("Enter new content (Markdown format):")
-    print("Type 'END' on a new line when finished, or Ctrl+D (Ctrl+Z on Windows) to finish.\n")
-
-    lines = []
+    # First, fetch the current note content
     try:
-        while True:
-            line = input()
-            if line.strip() == "END":
-                break
-            lines.append(line)
-    except EOFError:
-        # User pressed Ctrl+D (Unix) or Ctrl+Z (Windows)
-        pass
-
-    content_md = "\n".join(lines)
-
-    if not content_md.strip():
-        print("\nError: Note content cannot be empty.\n")
-        return
-
-    try:
-        response = httpx.patch(
-            f"{API_URL}/notes/{note_id}",
-            json={"content_md": content_md},
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0,
+        response = httpx.get(
+            f"{API_URL}/notes/{note_id}", headers={"Authorization": f"Bearer {token}"}, timeout=10.0
         )
         response.raise_for_status()
         note = response.json()
-
-        print("\n✓ Note updated successfully!")
-        print(f"  ID: {note['id']}")
-        print(f"  Title: {note['title']}")
-        print(f"  Word count: {note.get('word_count', 0)}")
-        print(f"  Version: {note.get('version', 1)}\n")
+        current_content = note.get("content_md", "")
+        note_title = note.get("title", "Untitled")
 
     except httpx.ConnectError:
         print("Error: Could not connect to API server.")
         print("Please start the server with: python -m api.server\n")
+        return
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
             print("Error: Authentication failed. Please /login again.\n")
@@ -344,6 +351,88 @@ def update_note(note_id: str):
             print(f"Error: Note with ID '{note_id}' not found.\n")
         else:
             error_detail = e.response.json().get("detail", "Unknown error")
-            print(f"Error: Failed to update note: {error_detail}\n")
+            print(f"Error: Failed to retrieve note: {error_detail}\n")
+        return
     except httpx.HTTPError as e:
         print(f"Error: API request failed: {e}\n")
+        return
+
+    # Create a temporary file with the current content
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as tmp_file:
+        tmp_file.write(current_content)
+        tmp_file_path = tmp_file.name
+
+    try:
+        # Get the user's preferred editor
+        editor = _get_editor()
+
+        print(f"\nOpening note '{note_title}' in {editor}...")
+        print("Edit the note, save, and close the editor to update.\n")
+
+        # Open the editor
+        try:
+            subprocess.run([editor, tmp_file_path], check=True)
+        except subprocess.CalledProcessError:
+            print(f"\nError: Editor '{editor}' exited with an error.\n")
+            Path(tmp_file_path).unlink()
+            return
+        except FileNotFoundError:
+            print(f"\nError: Editor '{editor}' not found.\n")
+            print("You can set your preferred editor with: export EDITOR=nano\n")
+            Path(tmp_file_path).unlink()
+            return
+
+        # Read the edited content
+        edited_content = Path(tmp_file_path).read_text(encoding="utf-8")
+
+        # Check if content was changed
+        if edited_content == current_content:
+            print("\nNo changes made. Note not updated.\n")
+            Path(tmp_file_path).unlink()
+            return
+
+        if not edited_content.strip():
+            print("\nError: Note content cannot be empty. Note not updated.\n")
+            Path(tmp_file_path).unlink()
+            return
+
+        # Send the update to the API
+        try:
+            response = httpx.patch(
+                f"{API_URL}/notes/{note_id}",
+                json={"content_md": edited_content},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            updated_note = response.json()
+
+            print("\n✓ Note updated successfully!")
+            print(f"  ID: {updated_note['id']}")
+            print(f"  Title: {updated_note['title']}")
+            print(f"  Word count: {updated_note.get('word_count', 0)}")
+            print(f"  Version: {updated_note.get('version', 1)}\n")
+
+        except httpx.ConnectError:
+            print("Error: Could not connect to API server.")
+            print("Please start the server with: python -m api.server\n")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                print("Error: Authentication failed. Please /login again.\n")
+                delete_token()
+            elif e.response.status_code == 403:
+                print("Error: Your account has been disabled.\n")
+                delete_token()
+            elif e.response.status_code == 404:
+                print(f"Error: Note with ID '{note_id}' not found.\n")
+            else:
+                error_detail = e.response.json().get("detail", "Unknown error")
+                print(f"Error: Failed to update note: {error_detail}\n")
+        except httpx.HTTPError as e:
+            print(f"Error: API request failed: {e}\n")
+
+    finally:
+        # Clean up the temporary file
+        tmp_path = Path(tmp_file_path)
+        if tmp_path.exists():
+            tmp_path.unlink()
