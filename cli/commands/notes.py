@@ -13,7 +13,7 @@ from ..config import API_URL, delete_token, load_token
 
 
 def create_note():
-    """Handle multi-line note creation with markdown support."""
+    """Handle note creation with markdown support using an external text editor."""
     print("\n=== Create New Note ===")
 
     # Get title
@@ -30,69 +30,89 @@ def create_note():
     notebook_input = input("Notebook ID (optional, press Enter to skip): ").strip()
     notebook_id = notebook_input if notebook_input else None
 
-    # Get multi-line markdown content
-    print("\nEnter note content (Markdown format):")
-    print("Type 'END' on a new line when finished, or Ctrl+D (Ctrl+Z on Windows) to finish.\n")
-
-    lines = []
-    try:
-        while True:
-            line = input()
-            if line.strip() == "END":
-                break
-            lines.append(line)
-    except EOFError:
-        # User pressed Ctrl+D (Unix) or Ctrl+Z (Windows)
-        pass
-
-    content_md = "\n".join(lines)
-
-    if not content_md.strip():
-        print("\nError: Note content cannot be empty.\n")
-        return
-
-    # Check authentication
+    # Check authentication early
     token = load_token()
     if not token:
         print("Error: You must be logged in to create notes. Use /register or /login.\n")
         return
 
-    # Send request to API
+    # Create a temporary file for editing
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as tmp_file:
+        # Add a helpful template
+        tmp_file.write(f"# {title}\n\n")
+        tmp_file.write("<!-- Write your note content here in Markdown format -->\n\n")
+        tmp_file_path = tmp_file.name
+
     try:
-        payload = {"title": title, "content_md": content_md, "tags": tags}
+        # Get the user's preferred editor
+        editor = _get_editor()
 
-        if notebook_id:
-            payload["notebook_id"] = notebook_id
+        print(f"\nOpening editor ({editor}) to write note content...")
+        print("Write your note, save, and close the editor to create the note.\n")
 
-        response = httpx.post(
-            f"{API_URL}/notes",
-            json=payload,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0,
-        )
-        response.raise_for_status()
-        data = response.json()
+        # Open the editor
+        try:
+            subprocess.run([editor, tmp_file_path], check=True)
+        except subprocess.CalledProcessError:
+            print(f"\nError: Editor '{editor}' exited with an error.\n")
+            Path(tmp_file_path).unlink()
+            return
+        except FileNotFoundError:
+            print(f"\nError: Editor '{editor}' not found.\n")
+            print("You can set your preferred editor with: export EDITOR=nano\n")
+            Path(tmp_file_path).unlink()
+            return
 
-        print("\n✓ Note created successfully!")
-        print(f"  Note ID: {data['id']}")
-        print(f"  Title: {data['title']}")
-        print(f"  Word count: {data.get('word_count', 'N/A')}")
-        print(f"  Created: {data['created_at']}\n")
-    except httpx.ConnectError:
-        print("Error: Could not connect to API server.")
-        print("Please start the server with: python -m api.server\n")
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            print("Error: Authentication failed. Please /login again.\n")
-            delete_token()
-        elif e.response.status_code == 403:
-            print("Error: Your account has been disabled.\n")
-            delete_token()
-        else:
-            error_detail = e.response.json().get("detail", "Unknown error")
-            print(f"Error: Failed to create note: {error_detail}\n")
-    except httpx.HTTPError as e:
-        print(f"Error: API request failed: {e}\n")
+        # Read the edited content
+        content_md = Path(tmp_file_path).read_text(encoding="utf-8")
+
+        if not content_md.strip():
+            print("\nError: Note content cannot be empty.\n")
+            Path(tmp_file_path).unlink()
+            return
+
+        # Send request to API
+        try:
+            payload = {"title": title, "content_md": content_md, "tags": tags}
+
+            if notebook_id:
+                payload["notebook_id"] = notebook_id
+
+            response = httpx.post(
+                f"{API_URL}/notes",
+                json=payload,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            print("\n✓ Note created successfully!")
+            print(f"  Note ID: {data['id']}")
+            print(f"  Title: {data['title']}")
+            print(f"  Word count: {data.get('word_count', 'N/A')}")
+            print(f"  Created: {data['created_at']}\n")
+        except httpx.ConnectError:
+            print("Error: Could not connect to API server.")
+            print("Please start the server with: python -m api.server\n")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                print("Error: Authentication failed. Please /login again.\n")
+                delete_token()
+            elif e.response.status_code == 403:
+                print("Error: Your account has been disabled.\n")
+                delete_token()
+            else:
+                error_detail = e.response.json().get("detail", "Unknown error")
+                print(f"Error: Failed to create note: {error_detail}\n")
+        except httpx.HTTPError as e:
+            print(f"Error: API request failed: {e}\n")
+
+    finally:
+        # Clean up the temporary file
+        tmp_path = Path(tmp_file_path)
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 def list_notes(args: str = ""):
