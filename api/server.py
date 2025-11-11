@@ -9,7 +9,14 @@ load_dotenv()
 
 def run_server(host: str = "0.0.0.0", port: int = 8000, reload: bool = False):
     """Run the FastAPI server."""
-    uvicorn.run("api.app:app", host=host, port=port, reload=reload, log_level="info")
+    uvicorn.run(
+        "api.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="info",
+        access_log=False,  # Disable uvicorn access logs (we have OTEL instrumentation)
+    )
 
 
 if __name__ == "__main__":
