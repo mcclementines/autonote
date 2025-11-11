@@ -143,13 +143,7 @@ def configure_logging():
     log_level = os.getenv("OTEL_LOG_LEVEL", "INFO").upper()
     log_format = os.getenv("LOG_FORMAT", "json").lower()  # json or console
 
-    # Configure standard library logging
-    logging.basicConfig(
-        format="%(message)s",
-        level=getattr(logging, log_level),
-    )
-
-    # Shared processors for all configurations
+    # Shared processors for all log sources (both structlog and stdlib)
     shared_processors = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
@@ -160,28 +154,62 @@ def configure_logging():
         structlog.processors.StackInfoRenderer(),
     ]
 
-    # Choose renderer based on format
+    # Choose the final renderer based on format
     if log_format == "json":
         # JSON format for production (Splunk, ELK, etc.)
-        processors = shared_processors + [
-            structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer(),
-        ]
+        renderer = structlog.processors.JSONRenderer()
+        exception_processor = structlog.processors.format_exc_info
     else:
         # Console format for development (human-readable)
-        processors = shared_processors + [
-            structlog.processors.ExceptionRenderer(),
-            structlog.dev.ConsoleRenderer(colors=True),
-        ]
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+        exception_processor = structlog.processors.ExceptionRenderer()
+
+    # Processors for structlog loggers - don't render yet, just prepare for stdlib
+    structlog_processors = shared_processors + [
+        exception_processor,
+        # This tells structlog to pass the event dict to stdlib logging for rendering
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ]
 
     # Configure structlog
     structlog.configure(
-        processors=processors,
+        processors=structlog_processors,
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
+
+    # Configure standard library logging to use structlog for rendering
+    # This handles both:
+    # 1. Logs from structlog (via wrap_for_formatter above)
+    # 2. Logs from third-party libraries (httpx, openai, etc.)
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processor=renderer,
+        foreign_pre_chain=shared_processors + [exception_processor],
+    )
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(getattr(logging, log_level))
+
+    # Configure library-specific log levels to reduce noise
+    # You can override these with environment variables like HTTPX_LOG_LEVEL=DEBUG
+    library_log_levels = {
+        "httpx": os.getenv("HTTPX_LOG_LEVEL", "WARNING"),  # Reduce httpx HTTP request logs
+        "httpcore": os.getenv("HTTPCORE_LOG_LEVEL", "WARNING"),  # Reduce httpcore logs
+        "openai": os.getenv("OPENAI_LOG_LEVEL", "INFO"),  # OpenAI SDK logs
+        "uvicorn.access": os.getenv("UVICORN_ACCESS_LOG_LEVEL", "INFO"),  # Uvicorn access logs
+        "pymongo": os.getenv("PYMONGO_LOG_LEVEL", "INFO"),  # PyMongo/Motor logs
+    }
+
+    for logger_name, level in library_log_levels.items():
+        logging.getLogger(logger_name).setLevel(getattr(logging, level.upper()))
 
     # Get a logger and log initialization
     logger = structlog.get_logger()
@@ -209,6 +237,26 @@ def initialize_observability():
     )
 
     return tracer_provider, meter_provider
+
+
+def shutdown_observability():
+    """Shutdown OpenTelemetry components gracefully."""
+    logger = structlog.get_logger()
+    logger.info("shutting_down_observability")
+
+    # Shutdown trace provider (flushes pending spans)
+    tracer_provider = trace.get_tracer_provider()
+    if hasattr(tracer_provider, "shutdown"):
+        tracer_provider.shutdown()
+        logger.debug("tracer_provider_shutdown")
+
+    # Shutdown meter provider (flushes pending metrics)
+    meter_provider = metrics.get_meter_provider()
+    if hasattr(meter_provider, "shutdown"):
+        meter_provider.shutdown()
+        logger.debug("meter_provider_shutdown")
+
+    logger.info("observability_shutdown_complete")
 
 
 def get_tracer(name: str = __name__) -> trace.Tracer:
