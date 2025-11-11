@@ -239,6 +239,26 @@ def initialize_observability():
     return tracer_provider, meter_provider
 
 
+def shutdown_observability():
+    """Shutdown OpenTelemetry components gracefully."""
+    logger = structlog.get_logger()
+    logger.info("shutting_down_observability")
+
+    # Shutdown trace provider (flushes pending spans)
+    tracer_provider = trace.get_tracer_provider()
+    if hasattr(tracer_provider, "shutdown"):
+        tracer_provider.shutdown()
+        logger.debug("tracer_provider_shutdown")
+
+    # Shutdown meter provider (flushes pending metrics)
+    meter_provider = metrics.get_meter_provider()
+    if hasattr(meter_provider, "shutdown"):
+        meter_provider.shutdown()
+        logger.debug("meter_provider_shutdown")
+
+    logger.info("observability_shutdown_complete")
+
+
 def get_tracer(name: str = __name__) -> trace.Tracer:
     """Get a tracer instance for creating spans."""
     return trace.get_tracer(name, SERVICE_VERSION_VALUE)

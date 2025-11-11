@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from .database import Database
-from .observability import initialize_observability
+from .observability import initialize_observability, shutdown_observability
 from .routes import auth_router, chat_router, health_router, notes_router
 
 # Initialize logger
@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("api_shutting_down")
     await Database.disconnect()
+    shutdown_observability()
     logger.info("api_shutdown_complete")
 
 
