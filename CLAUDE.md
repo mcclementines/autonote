@@ -376,9 +376,25 @@ autonote/
 
 **Configuration:**
 See `.env.example` for all OpenTelemetry configuration options. Key settings:
-- `OTEL_EXPORTER_TYPE`: Set to `console` (dev) or `otlp` (prod)
+- `OTEL_TRACES_EXPORTER`: Set to `console` (dev), `otlp` (prod), or `none` (disable)
+- `OTEL_METRICS_EXPORTER`: Set to `console` (dev), `otlp` (prod), or `none` (disable)
 - `OTEL_EXPORTER_OTLP_ENDPOINT`: Your observability backend endpoint
 - `OTEL_LOG_LEVEL`: Log verbosity (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- `LOG_FORMAT`: Set to `console` (development) or `json` (production)
+
+**Structured Logging:**
+All logs (including third-party libraries) are automatically routed through structlog:
+- Consistent JSON or console formatting across all components
+- Automatic trace/span ID correlation
+- Timestamp, log level, logger name on every log entry
+- Library-specific log level controls to reduce noise:
+  - `HTTPX_LOG_LEVEL=WARNING`: Hide HTTP request logs (default: WARNING)
+  - `HTTPCORE_LOG_LEVEL=WARNING`: Hide low-level HTTP logs (default: WARNING)
+  - `OPENAI_LOG_LEVEL=INFO`: OpenAI SDK logs (default: INFO)
+  - `UVICORN_ACCESS_LOG_LEVEL=INFO`: HTTP access logs (default: INFO)
+  - `PYMONGO_LOG_LEVEL=INFO`: Database operation logs (default: INFO)
+
+Example: To see all httpx HTTP requests, set `HTTPX_LOG_LEVEL=DEBUG` in your `.env` file.
 
 **Supported Backends:**
 - Jaeger (open source, local development)

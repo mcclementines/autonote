@@ -143,12 +143,6 @@ def configure_logging():
     log_level = os.getenv("OTEL_LOG_LEVEL", "INFO").upper()
     log_format = os.getenv("LOG_FORMAT", "json").lower()  # json or console
 
-    # Configure standard library logging
-    logging.basicConfig(
-        format="%(message)s",
-        level=getattr(logging, log_level),
-    )
-
     # Shared processors for all configurations
     shared_processors = [
         structlog.contextvars.merge_contextvars,
@@ -182,6 +176,39 @@ def configure_logging():
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
+
+    # Configure standard library logging to use structlog
+    # This redirects logs from httpx, openai, uvicorn, etc. through structlog
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processor=structlog.dev.ConsoleRenderer(colors=True)
+        if log_format == "console"
+        else structlog.processors.JSONRenderer(),
+        foreign_pre_chain=shared_processors,
+    )
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(getattr(logging, log_level))
+
+    # Configure library-specific log levels to reduce noise
+    # You can override these with environment variables like HTTPX_LOG_LEVEL=DEBUG
+    library_log_levels = {
+        "httpx": os.getenv("HTTPX_LOG_LEVEL", "WARNING"),  # Reduce httpx HTTP request logs
+        "httpcore": os.getenv("HTTPCORE_LOG_LEVEL", "WARNING"),  # Reduce httpcore logs
+        "openai": os.getenv("OPENAI_LOG_LEVEL", "INFO"),  # OpenAI SDK logs
+        "uvicorn.access": os.getenv(
+            "UVICORN_ACCESS_LOG_LEVEL", "INFO"
+        ),  # Uvicorn access logs
+        "pymongo": os.getenv("PYMONGO_LOG_LEVEL", "INFO"),  # PyMongo/Motor logs
+    }
+
+    for logger_name, level in library_log_levels.items():
+        logging.getLogger(logger_name).setLevel(getattr(logging, level.upper()))
 
     # Get a logger and log initialization
     logger = structlog.get_logger()
