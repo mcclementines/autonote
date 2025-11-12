@@ -456,3 +456,51 @@ def update_note(note_id: str):
         tmp_path = Path(tmp_file_path)
         if tmp_path.exists():
             tmp_path.unlink()
+
+
+def delete_note(note_id: str):
+    """Delete a note (soft delete - moves to trash)."""
+    if not note_id or not note_id.strip():
+        print("Error: Note ID is required. Usage: /delete <note_id>\n")
+        return
+
+    note_id = note_id.strip()
+
+    token = load_token()
+    if not token:
+        print("Error: You must be logged in to delete notes. Use /register or /login.\n")
+        return
+
+    # Confirm deletion
+    confirm = input(f"Are you sure you want to delete note '{note_id}'? (y/N): ").strip().lower()
+    if confirm not in ["y", "yes"]:
+        print("\nDeletion cancelled.\n")
+        return
+
+    try:
+        response = httpx.delete(
+            f"{API_URL}/notes/{note_id}", headers={"Authorization": f"Bearer {token}"}, timeout=10.0
+        )
+        response.raise_for_status()
+
+        print("\n✓ Note moved to trash successfully!")
+        print(f"  Note ID: {note_id}")
+        print("  Tip: You can view trashed notes with: /notes trashed\n")
+
+    except httpx.ConnectError:
+        print("Error: Could not connect to API server.")
+        print("Please start the server with: python -m api.server\n")
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            print("Error: Authentication failed. Please /login again.\n")
+            delete_token()
+        elif e.response.status_code == 403:
+            print("Error: Your account has been disabled.\n")
+            delete_token()
+        elif e.response.status_code == 404:
+            print(f"Error: Note with ID '{note_id}' not found.\n")
+        else:
+            error_detail = e.response.json().get("detail", "Unknown error")
+            print(f"Error: Failed to delete note: {error_detail}\n")
+    except httpx.HTTPError as e:
+        print(f"Error: API request failed: {e}\n")

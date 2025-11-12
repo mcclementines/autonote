@@ -7,6 +7,7 @@ import httpx
 
 from .commands import (
     create_note,
+    delete_note,
     list_notes,
     list_sessions,
     login_user,
@@ -40,6 +41,7 @@ def main():
     print("  /view <note_id> - View a specific note")
     print("  /rename <note_id> <new_title> - Rename a note")
     print("  /update <note_id> - Update note content")
+    print("  /delete <note_id> - Delete a note (move to trash)")
     print("\nUtility Commands:")
     print("  /clear - Clear the terminal screen")
     print("\nType 'exit' or 'quit' to end the conversation.")
@@ -102,6 +104,12 @@ def main():
                 # Extract note_id argument
                 note_id = user_input[8:].strip()  # Skip "/update "
                 update_note(note_id)
+                continue
+
+            if user_input.lower().startswith("/delete "):
+                # Extract note_id argument
+                note_id = user_input[8:].strip()  # Skip "/delete "
+                delete_note(note_id)
                 continue
 
             if user_input.lower() == "/new":
