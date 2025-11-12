@@ -376,3 +376,47 @@ async def update_note(
         logger.info("note_updated_successfully", user_id=user_id, note_id=note_id)
 
         return note_response
+
+
+@router.delete("/{note_id}", status_code=204)
+async def delete_note(note_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Delete a note (soft delete by setting status to 'trashed').
+
+    Requires authentication and ownership of the note.
+    The note is not permanently deleted - it's moved to trash status.
+    """
+    with tracer.start_as_current_span("delete_note") as span:
+        user_id = str(current_user.get("_id"))
+
+        span.set_attribute("user.id", user_id)
+        span.set_attribute("note.id", note_id)
+
+        db = get_db()
+
+        # Validate note_id format
+        try:
+            note_obj_id = ObjectId(note_id)
+        except Exception:
+            logger.warning("delete_note_invalid_id", user_id=user_id, note_id=note_id)
+            raise HTTPException(status_code=400, detail="Invalid note ID format")
+
+        # Check if note exists and belongs to user
+        existing_note = await db.notes.find_one(
+            {"_id": note_obj_id, "author_id": ObjectId(user_id)}
+        )
+
+        if not existing_note:
+            logger.warning("delete_note_not_found", user_id=user_id, note_id=note_id)
+            raise HTTPException(status_code=404, detail="Note not found")
+
+        # Soft delete by setting status to 'trashed'
+        update_doc = {"status": "trashed", "updated_at": datetime.utcnow()}
+
+        await db.notes.update_one({"_id": note_obj_id}, {"$set": update_doc})
+
+        span.set_attribute("note.deleted", True)
+        logger.info("note_deleted_successfully", user_id=user_id, note_id=note_id)
+
+        # 204 No Content - no response body needed
+        return
