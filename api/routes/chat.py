@@ -115,7 +115,7 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
         # Retrieve relevant notes for RAG using hybrid search
         # keyword_weight=0.3, vector_weight=0.7 favors semantic understanding
         retrieval = NoteRetrieval(
-            top_k=3, max_tokens_per_note=500, keyword_weight=0.3, vector_weight=0.7
+            top_k=5, max_tokens_per_note=4000, keyword_weight=0.3, vector_weight=0.7
         )
         relevant_notes = await retrieval.hybrid_retrieve(user_id=user_id, query=request.message)
 
@@ -338,7 +338,7 @@ async def chat_stream(request: ChatRequest, current_user: dict = Depends(get_cur
 
                 # Retrieve relevant notes for RAG using hybrid search
                 retrieval = NoteRetrieval(
-                    top_k=3, max_tokens_per_note=500, keyword_weight=0.3, vector_weight=0.7
+                    top_k=5, max_tokens_per_note=4000, keyword_weight=0.3, vector_weight=0.7
                 )
                 relevant_notes = await retrieval.hybrid_retrieve(
                     user_id=user_id, query=request.message
