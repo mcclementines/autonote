@@ -158,7 +158,7 @@ async def list_notes(
     """
     List all notes for the authenticated user.
 
-    Optionally filter by status (active, archived, trashed).
+    By default, only shows active notes. Optionally filter by status (active, archived, trashed).
     Supports pagination with limit and skip parameters.
     """
     with tracer.start_as_current_span("list_notes") as span:
@@ -170,13 +170,17 @@ async def list_notes(
 
         db = get_db()
 
-        # Build query
+        # Build query - default to "active" notes only
         query = {"author_id": ObjectId(user_id)}
         if status:
             if status not in ["active", "archived", "trashed"]:
                 raise HTTPException(status_code=400, detail="Invalid status value")
             query["status"] = status
             span.set_attribute("query.status", status)
+        else:
+            # Default to showing only active notes
+            query["status"] = "active"
+            span.set_attribute("query.status", "active")
 
         # Get total count
         total = await db.notes.count_documents(query)
