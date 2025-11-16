@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import Depends, HTTPException, status
@@ -43,7 +43,7 @@ def create_access_token(user_id: str, email: str) -> str:
 
         logger.debug("jwt_token_creating", user_id=user_id)
 
-        expire = datetime.utcnow() + timedelta(days=EXPIRATION_DAYS)
+        expire = datetime.now(UTC) + timedelta(days=EXPIRATION_DAYS)
         to_encode = {
             "sub": user_id,  # Subject (user_id)
             "email": email,

@@ -1,6 +1,6 @@
 """Authentication endpoints."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, HTTPException
@@ -47,7 +47,7 @@ async def register_user(user: UserCreate):
         user_doc = {
             "email": user.email,
             "name": user.name,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(UTC),
             "status": "active",
         }
 

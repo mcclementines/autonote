@@ -1,7 +1,7 @@
 """Notes endpoints."""
 
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from bson import ObjectId
@@ -100,7 +100,7 @@ async def create_note(note: NoteCreate, current_user: dict = Depends(get_current
                 raise HTTPException(status_code=400, detail="Invalid notebook ID format")
 
         # Create note document
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         note_doc = {
             "notebook_id": notebook_obj_id,
             "author_id": ObjectId(user_id),
@@ -349,7 +349,7 @@ async def update_note(
             )
 
         # Update timestamp and increment version
-        update_doc["updated_at"] = datetime.utcnow()
+        update_doc["updated_at"] = datetime.now(UTC)
         update_doc["version"] = existing_note.get("version", 1) + 1
 
         # Perform update
@@ -415,7 +415,7 @@ async def delete_note(note_id: str, current_user: dict = Depends(get_current_use
             raise HTTPException(status_code=404, detail="Note not found")
 
         # Soft delete by setting status to 'trashed'
-        update_doc = {"status": "trashed", "updated_at": datetime.utcnow()}
+        update_doc = {"status": "trashed", "updated_at": datetime.now(UTC)}
 
         await db.notes.update_one({"_id": note_obj_id}, {"$set": update_doc})
 
