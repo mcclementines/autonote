@@ -2,7 +2,7 @@
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from bson import ObjectId
@@ -54,7 +54,7 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
         logger.info("chat_message_received", user_id=user_id, message_length=len(request.message))
 
         db = get_db()
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Get or create session
         if request.session_id:
@@ -208,7 +208,7 @@ async def chat(request: ChatRequest, current_user: dict = Depends(get_current_us
             "role": "assistant",
             "content": response_text,
             "citations": citations,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(UTC),
         }
         assistant_msg_result = await db.chat_messages.insert_one(assistant_message_doc)
         assistant_msg_id = str(assistant_msg_result.inserted_id)
@@ -265,7 +265,7 @@ async def chat_stream(request: ChatRequest, current_user: dict = Depends(get_cur
             )
 
             db = get_db()
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
 
             try:
                 # Get or create session
@@ -442,7 +442,7 @@ async def chat_stream(request: ChatRequest, current_user: dict = Depends(get_cur
                     "role": "assistant",
                     "content": full_response,
                     "citations": citations,
-                    "created_at": datetime.utcnow(),
+                    "created_at": datetime.now(UTC),
                 }
                 assistant_msg_result = await db.chat_messages.insert_one(assistant_message_doc)
                 assistant_msg_id = str(assistant_msg_result.inserted_id)
@@ -508,7 +508,7 @@ async def create_chat_session(
         db = get_db()
 
         # Create session document
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         session_doc = {
             "user_id": ObjectId(user_id),
             "title": session_data.title or f"Chat {now.strftime('%Y-%m-%d %H:%M')}",
@@ -556,7 +556,7 @@ async def list_chat_sessions(
         # Query sessions
         cursor = (
             db.chat_sessions.find({"user_id": ObjectId(user_id)})
-            .sort("last_active_at", -1)
+            .sort([("last_active_at", -1), ("_id", -1)])
             .skip(skip)
             .limit(limit)
         )

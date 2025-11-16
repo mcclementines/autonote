@@ -19,7 +19,7 @@ Falls back to basic MongoDB operations when Atlas Search is not available.
 """
 
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from bson import ObjectId
@@ -209,7 +209,7 @@ class NoteRetrieval:
                     "title": note.get("title", "Untitled"),
                     "content_md": content,
                     "score": note.get("score", 0.0),
-                    "created_at": note.get("created_at", datetime.utcnow()),
+                    "created_at": note.get("created_at", datetime.now(UTC)),
                     "tags": note.get("tags", []),
                 }
             )
@@ -254,7 +254,7 @@ class NoteRetrieval:
                     "title": note.get("title", "Untitled"),
                     "content_md": content,
                     "score": note.get("score", 0.0),
-                    "created_at": note.get("created_at", datetime.utcnow()),
+                    "created_at": note.get("created_at", datetime.now(UTC)),
                     "tags": note.get("tags", []),
                 }
             )
@@ -433,7 +433,7 @@ class NoteRetrieval:
                     "title": note.get("title", "Untitled"),
                     "content_md": content,
                     "score": note.get("score", 0.0),
-                    "created_at": note.get("created_at", datetime.utcnow()),
+                    "created_at": note.get("created_at", datetime.now(UTC)),
                     "tags": note.get("tags", []),
                 }
             )
@@ -486,7 +486,7 @@ class NoteRetrieval:
                     "title": note.get("title", "Untitled"),
                     "content_md": content,
                     "score": similarity,
-                    "created_at": note.get("created_at", datetime.utcnow()),
+                    "created_at": note.get("created_at", datetime.now(UTC)),
                     "tags": note.get("tags", []),
                 }
             )
