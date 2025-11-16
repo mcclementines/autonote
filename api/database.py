@@ -119,9 +119,52 @@ class Database:
             )
             logger.debug("text_index_ensured", collection="notes", fields=["title", "content_md"])
 
+            # Create 'chat_sessions' collection if it doesn't exist
+            if "chat_sessions" not in existing_collections:
+                await cls.db.create_collection("chat_sessions")
+                logger.info("collection_created", collection="chat_sessions")
+            else:
+                logger.debug("collection_exists", collection="chat_sessions")
+
+            # Create 'chat_messages' collection if it doesn't exist
+            if "chat_messages" not in existing_collections:
+                await cls.db.create_collection("chat_messages")
+                logger.info("collection_created", collection="chat_messages")
+            else:
+                logger.debug("collection_exists", collection="chat_messages")
+
+            # Create 'note_chunks' collection if it doesn't exist
+            if "note_chunks" not in existing_collections:
+                await cls.db.create_collection("note_chunks")
+                logger.info("collection_created", collection="note_chunks")
+            else:
+                logger.debug("collection_exists", collection="note_chunks")
+
+            # Create indexes for note_chunks collection
+            await cls.db.note_chunks.create_index("note_id")
+            logger.debug("index_ensured", collection="note_chunks", field="note_id")
+
+            await cls.db.note_chunks.create_index([("note_id", 1), ("chunk_index", 1)])
+            logger.debug(
+                "compound_index_ensured",
+                collection="note_chunks",
+                fields=["note_id", "chunk_index"],
+            )
+
+            await cls.db.note_chunks.create_index("note_version")
+            logger.debug("index_ensured", collection="note_chunks", field="note_version")
+
+            await cls.db.note_chunks.create_index([("note_id", 1), ("note_version", 1)])
+            logger.debug(
+                "compound_index_ensured",
+                collection="note_chunks",
+                fields=["note_id", "note_version"],
+            )
+
             # Atlas Search Indexes (must be created via Atlas UI or Admin API):
-            # - notes_vector_index: Vector search on 'embedding' field
+            # - notes_vector_index: Vector search on 'embedding' field (note-level)
             # - notes_search_index: Full-text search on 'title' and 'content_md'
+            # - note_chunks_vector_index: Vector search on chunks 'embedding' field
             # See: python -m scripts.setup_atlas_indexes for setup instructions
             logger.info(
                 "atlas_indexes_note",

@@ -115,6 +115,10 @@ async def create_note(note: NoteCreate, current_user: dict = Depends(get_current
             "word_count": word_count,
             "links_out": [],
             "embedding": embedding_vector,  # Store embedding for vector search
+            "chunk_count": 0,  # Will be updated after chunking
+            "chunking_strategy": "hierarchical_markdown",
+            "last_chunked_at": None,
+            "chunking_version": 1,  # For future migrations
         }
 
         # Insert into database
