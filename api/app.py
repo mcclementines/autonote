@@ -9,6 +9,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from .database import Database
 from .observability import initialize_observability, shutdown_observability
 from .routes import auth_router, chat_router, health_router, notes_router
+from .services.background_tasks import task_queue
 
 # Initialize logger
 logger = structlog.get_logger(__name__)
@@ -25,12 +26,20 @@ async def lifespan(app: FastAPI):
 
     # Connect to database
     await Database.connect()
+
+    # Start background task worker
+    await task_queue.start_worker()
+
     logger.info("api_started")
 
     yield
 
     # Shutdown
     logger.info("api_shutting_down")
+
+    # Stop background task worker
+    await task_queue.stop_worker()
+
     await Database.disconnect()
     shutdown_observability()
     logger.info("api_shutdown_complete")

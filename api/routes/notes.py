@@ -13,6 +13,8 @@ from ..auth import get_current_user
 from ..database import get_db
 from ..models import NoteCreate, NoteListResponse, NoteResponse, NoteUpdate
 from ..observability import get_tracer
+from ..services.background_tasks import task_queue
+from ..services.chunking import MarkdownChunker
 
 # Initialize logger
 logger = structlog.get_logger(__name__)
@@ -21,6 +23,81 @@ logger = structlog.get_logger(__name__)
 tracer = get_tracer(__name__)
 
 router = APIRouter(prefix="/notes", tags=["notes"])
+
+
+async def _chunk_and_store_note(
+    note_id: ObjectId,
+    title: str,
+    content: str,
+    version: int,
+) -> int:
+    """Chunk note and store in note_chunks collection.
+
+    Args:
+        note_id: MongoDB ObjectId of the note
+        title: Note title
+        content: Note content (markdown)
+        version: Note version number
+
+    Returns:
+        Number of chunks created
+    """
+    db = get_db()
+
+    try:
+        # Generate chunks
+        chunker = MarkdownChunker()
+        chunks = chunker.chunk_note(content, title)
+
+        # Generate embeddings for chunks
+        chunks = await chunker.generate_embeddings(chunks)
+
+        # Store chunks in database
+        chunk_docs = []
+        for chunk in chunks:
+            chunk_doc = {
+                "note_id": note_id,
+                "chunk_index": chunk.chunk_index,
+                "heading_path": chunk.heading_path,
+                "content_md": chunk.content_md,
+                "embedding": chunk.embedding,
+                "token_count": chunk.token_count,
+                "chunk_type": chunk.chunk_type,
+                "created_at": datetime.utcnow(),
+                "note_version": version,
+            }
+            chunk_docs.append(chunk_doc)
+
+        if chunk_docs:
+            await db.note_chunks.insert_many(chunk_docs)
+
+        # Update note metadata
+        await db.notes.update_one(
+            {"_id": note_id},
+            {
+                "$set": {
+                    "chunk_count": len(chunks),
+                    "last_chunked_at": datetime.utcnow(),
+                }
+            },
+        )
+
+        logger.info(
+            "note_chunked_and_stored",
+            note_id=str(note_id),
+            chunk_count=len(chunks),
+        )
+
+        return len(chunks)
+
+    except Exception as e:
+        logger.error(
+            "note_chunking_failed",
+            note_id=str(note_id),
+            error=str(e),
+        )
+        # Don't fail the whole note creation if chunking fails
+        return 0
 
 
 @router.post("", response_model=NoteResponse, status_code=201)
@@ -127,6 +204,31 @@ async def create_note(note: NoteCreate, current_user: dict = Depends(get_current
 
         span.set_attribute("note.id", note_id)
         span.set_attribute("note.word_count", word_count)
+
+        # Generate and store chunks
+        chunking_enabled = os.getenv("CHUNKING_ENABLED", "true").lower() == "true"
+        if chunking_enabled:
+            async_chunking = os.getenv("CHUNKING_ASYNC", "true").lower() == "true"
+
+            if async_chunking:
+                # Process chunking in background
+                task_queue.enqueue(
+                    _chunk_and_store_note,
+                    note_id=result.inserted_id,
+                    title=note.title,
+                    content=note.content_md,
+                    version=1,
+                )
+                logger.info("note_chunking_queued", note_id=note_id)
+            else:
+                # Process chunking synchronously
+                chunk_count = await _chunk_and_store_note(
+                    note_id=result.inserted_id,
+                    title=note.title,
+                    content=note.content_md,
+                    version=1,
+                )
+                span.set_attribute("chunks.created", chunk_count)
 
         # Return response
         note_response = NoteResponse(
